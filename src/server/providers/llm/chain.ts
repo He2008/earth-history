@@ -1,4 +1,5 @@
 import { LlmAllFailedError, type LlmCall, type LlmProvider, type LlmRequest, type LlmUsage } from './types';
+import { log } from '@/server/obs/log';
 
 export { LlmAllFailedError }; // brief 修复:测试从 chain 导入该错误类,需再导出
 
@@ -24,8 +25,10 @@ export function createLlmChain(providers: LlmProvider[]): LlmProvider {
               for await (const c of call.stream) { produced = true; yield c; }
               ok = true;
             } catch (e) {
-              if (produced) { tried.push(`${p.name}:partial`); usageRej(e); throw e; } // 已产出部分后中断:链级 usage 立即结算
+              const msg = e instanceof Error ? e.message : String(e);
+              if (produced) { tried.push(`${p.name}:partial`); log.warn('llm.degrade', { provider: p.name, attempt: 'partial', err: msg }); usageRej(e); throw e; } // 已产出部分后中断:链级 usage 立即结算
               tried.push(`${p.name}#${attempt}`);
+              log.warn('llm.degrade', { provider: p.name, attempt, err: msg });
             }
             if (ok) {
               call.usage.then(usageRes, usageRej);
@@ -34,7 +37,7 @@ export function createLlmChain(providers: LlmProvider[]): LlmProvider {
             }
             const n = (fails.get(p.name) ?? 0) + 1;
             fails.set(p.name, n);
-            if (n >= 3) blockedUntil.set(p.name, Date.now() + 5 * 60_000);
+            if (n >= 3) { const retryAt = Date.now() + 5 * 60_000; blockedUntil.set(p.name, retryAt); log.warn('circuit.open', { provider: p.name, retryAt }); }
           }
         }
         const err = new LlmAllFailedError(tried);

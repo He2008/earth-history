@@ -3,6 +3,7 @@ import { openDb, migrate } from '@/server/db/client';
 import { createRepo, type Repo } from '@/server/db/repo';
 import { runTask, type PipelineDeps } from '@/server/orchestrator/pipeline';
 import { bus } from '@/server/orchestrator/events';
+import { __captureLogsForTests } from '@/server/obs/log';
 import { loadConfig } from '@/lib/config';
 import type { LlmProvider, LlmRequest, LlmCall } from '@/server/providers/llm/types';
 import { createLlmChain } from '@/server/providers/llm/chain';
@@ -94,6 +95,24 @@ describe('runTask', () => {
     const badLlm: LlmProvider = { name: 'deepseek', chatStream: () => ({ usage: badUsage, stream: (async function* () { throw new Error('x'); })() }) };
     await runTask('t5', deps({ llm: createLlmChain([badLlm]) }));
     expect(repo.getTask('t5')!.error_code).toBe('llm_all_failed');
+  });
+  it('抓取失败:fetch.fail 逐条 warn + fetch.summary 汇总 + timeline 记失败分布', async () => {
+    repo.createTask({ ...TASK, id: 't7' });
+    const flaky: Fetcher = { fetch: async (url): Promise<FetchedPage> => url.includes('/b/')
+      ? { url, title: '', text: '', chars: 0, ok: false, reason: 'http_403' }
+      : { url, title: '页', text: '正文', chars: 2, ok: true } };
+    const cap = __captureLogsForTests();
+    try { await runTask('t7', deps({ fetcher: flaky })); } finally { cap.restore(); }
+    expect(repo.getTask('t7')!.status).toBe('completed'); // 单源失败不毁任务
+    const fails = cap.lines.filter((l) => l.event === 'fetch.fail');
+    expect(fails).toHaveLength(1);
+    expect((fails[0] as Record<string, unknown>).reason).toBe('http_403');
+    const summary = cap.lines.find((l) => l.event === 'fetch.summary') as Record<string, unknown>;
+    expect(summary.ok).toBe(2);
+    expect(summary.fail).toBe(1);
+    expect(summary.reasons).toEqual({ http_403: 1 });
+    const tl = JSON.parse(repo.getTask('t7')!.timeline_json) as Array<{ note: string }>;
+    expect(tl.some((e) => e.note.includes('http_403:1'))).toBe(true);
   });
   it('自适应轮次:第 2 轮覆盖后不再跑第 3 轮', async () => {
     repo.createTask({ ...TASK, id: 't6' });

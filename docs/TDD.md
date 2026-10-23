@@ -247,8 +247,8 @@ run(task):
 ## 12. 可观测性
 
 - 每任务 `cost_json`(按引擎搜索次数、LLM tokens、折合 ¥)与 `timings_json`(各阶段耗时)
-- 结构化 JSON 日志一行一事件(taskId/phase/engine/elapsedMs/code)到 stdout
-- 👍/👎 落 feedback 列;M0 验收用 SQL 汇总配合 D3 盲评
+- 结构化 JSON 日志一行一事件(taskId/phase/engine/elapsedMs/code)到 stdout —— **实施细则与事件清单见 docs/LOGGING.md(D4,2026-10-23 已落地)**
+- 👍/👎 落 feedback 列;M0 验收用 SQL 汇总配合 D3 盲评(feedback 端点仍待做)
 
 ## 13. 非目标(M0/M1 明确不做)
 

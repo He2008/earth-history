@@ -3,6 +3,7 @@ import { DIRECTIONS } from '@/lib/types';
 import { getRunner } from '@/server/orchestrator/runner';
 import { getRepo } from '@/server/db/repo';
 import { bus } from '@/server/orchestrator/events';
+import { log } from '@/server/obs/log';
 
 const BodySchema = z.object({
   lat: z.number().min(-90).max(90),
@@ -64,7 +65,7 @@ export async function POST(req: Request): Promise<Response> {
         if (e.event === 'done' || e.event === 'error') { unsub(); close(); }
       });
       hb = setInterval(() => { if (!closed) { try { controller.enqueue(enc.encode(': ping\n\n')); } catch { /* noop */ } } }, 15_000);
-      req.signal.addEventListener('abort', () => { unsub(); close(); });
+      req.signal.addEventListener('abort', () => { log.debug('sse.client_abort', { taskId }); unsub(); close(); });
     },
   });
   return new Response(stream, {

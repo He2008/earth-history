@@ -1,4 +1,5 @@
 import { SearchAllFailedError, type SearchEngine, type SearchHit, type SearchOpts, type SearchProvider } from './types';
+import { log } from '@/server/obs/log';
 
 export { SearchAllFailedError }; // brief 修复:测试从 chain 导入该错误类,需再导出
 
@@ -15,9 +16,12 @@ export function createSearchChain(providers: SearchProvider[]): SearchChain {
           const hits = await p.search(query, opts);
           return { hits, engine: p.name };
         } catch (e) {
-          errs.push(`${p.name}: ${e instanceof Error ? e.message : String(e)}`);
+          const msg = e instanceof Error ? e.message : String(e);
+          log.warn('search.degrade', { engine: p.name, err: msg });
+          errs.push(`${p.name}: ${msg}`);
         }
       }
+      log.error('search.all_failed', { tried: errs });
       throw new SearchAllFailedError(errs.join(' | '));
     },
   };

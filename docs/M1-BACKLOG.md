@@ -15,7 +15,8 @@
 - SSE 契约对齐:`continue_polling` 事件未发(M0 无服务端主动断流,部署到反代后再启用);事件缺自增 `id:`;`search_hit.kept[]` 缺 idx。
 - fetcher:`AbortSignal.any` 已修信号旁路,但 abort 与网络错误同归 reason:'error';robots 不支持 Allow 行/查询串规则;单域串行未实现(TDD §7 承诺)。
 - 首个 progress 事件在订阅前发出即丢失(订阅先于任务启动可修);scarce 相位抖动(scarce→synthesizing→scarce)。
-- `>20% 无效引用` quality flag 只进 timeline,D3 盲评看不到;poll 响应缺 `scarcity` 字段;结构化 stdout 日志(TDD §12)未做。
+- ~~`>20% 无效引用` quality flag 只进 timeline,D3 盲评看不到~~;poll 响应缺 `scarcity` 字段;~~结构化 stdout 日志(TDD §12)未做~~。
+  - 2026-10-23 已做(D4,docs/LOGGING.md):结构化 stdout 日志全量落地(bus 白名单转发 + 12 埋点,含 `task.done.reportChars` 空报告探针、`fetch.start`(debug)卡死探针);quality flag 现同时进 timeline(`quality_flag: …`)与日志(`citations.invalid`);fetch 失败逐条 `fetch.fail` + `fetch.summary` + timeline 汇总;失败任务 catch 路径补 timeline `failed` 条目;生产验收 2095B/任务。
 - `startResearch` 无并发去重(同 key 并发会建两个任务);缓存过期行只判定不删除。
 
 ## 低优先(打磨)

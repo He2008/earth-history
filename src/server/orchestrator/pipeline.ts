@@ -15,6 +15,7 @@ import { createDeepSeekSearch } from '@/server/providers/search/deepseek';
 import type { Fetcher } from '@/server/providers/fetch/fetcher';
 import { createFetcher, RobotsGuard } from '@/server/providers/fetch/fetcher';
 import { planningMessages, synthesisMessages, scarceMessages, parsePlan } from '@/private/prompts';
+import { log } from '@/server/obs/log';
 import { buildSourcePack, validateCitations } from './citations';
 import { bus } from './events';
 import { registry, BUDGETS_MS } from './machine';
@@ -206,25 +207,40 @@ export async function runTask(taskId: string, deps: PipelineDeps, signal?: Abort
       const tf = Date.now();
       phase('fetching', `抓取前 ${Math.min(keptList.length, cfg.REPORT_MAX_SOURCES)} 个来源正文`);
       const pages: string[] = [];
+      const failReasons: Record<string, number> = {};
       const queue = [...keptList];
       const workers = Array.from({ length: Math.min(cfg.FETCH_CONCURRENCY, queue.length) }, async () => {
         while (queue.length && Date.now() - tf < BUDGETS_MS.fetchTotal) {
           const s = queue.shift()!;
+          log.debug('fetch.start', { taskId, idx: s.idx, urlNorm: s.urlNorm }); // 卡死定位探针(默认关)
           const page = await deps.fetcher.fetch(s.url, signal);
           const rowId = rowIdByUrlNorm.get(s.urlNorm)!;
           if (page.ok) {
             pages.push(`[${s.idx}] ${page.title}\n${page.text.slice(0, 1500)}`);
             repo.updateSource(rowId, { stage: 'fetched', fetched_chars: page.chars });
+          } else {
+            const reason = page.reason ?? 'error';
+            failReasons[reason] = (failReasons[reason] ?? 0) + 1;
+            log.warn('fetch.fail', { taskId, idx: s.idx, urlNorm: s.urlNorm, reason });
           }
         }
       });
       await Promise.all(workers);
       timings.fetchingMs = Date.now() - tf;
+      const failCount = Object.values(failReasons).reduce((a, b) => a + b, 0);
+      log.info('fetch.summary', { taskId, ok: pages.length, fail: failCount, reasons: failReasons });
+      if (failCount > 0) repo.appendTimeline(taskId, { phase: 'fetching', note: `抓取:成功 ${pages.length} / 失败 ${failCount}(${Object.entries(failReasons).map(([r, n]) => `${r}:${n}`).join(', ')})`, ts: Date.now() });
 
       // ---- synthesizing ----
       const raw = await synthesize(synthesisMessages(promptPlace, task.direction as Direction, plan, buildSourcePack(keptList), pages.join('\n\n')), BUDGETS_MS.synthesize);
       const { report, invalidCount } = validateCitations(raw, keptList.length);
-      if (invalidCount > 0) repo.appendTimeline(taskId, { phase: 'synthesizing', note: `剔除 ${invalidCount} 个无效引用标记`, ts: Date.now() });
+      if (invalidCount > 0) {
+        const totalMarks = (raw.match(/\[\d{1,3}\]/g) ?? []).length;
+        repo.appendTimeline(taskId, { phase: 'synthesizing', note: `剔除 ${invalidCount} 个无效引用标记`, ts: Date.now() });
+        log.warn('citations.invalid', { taskId, invalidCount });
+        // >20% 无效引用记 quality flag(Backlog:盲评也要能看到)
+        if (totalMarks > 0 && invalidCount / totalMarks > 0.2) repo.appendTimeline(taskId, { phase: 'synthesizing', note: `quality_flag: 无效引用占比 ${Math.round((invalidCount / totalMarks) * 100)}%`, ts: Date.now() });
+      }
       finalStatus = 'completed';
       finalMd = `${report.trim()}\n\n## 来源\n${keptList.map((s) => `${s.idx}. [${s.title}](${s.url})`).join('\n')}\n`;
     }
@@ -237,12 +253,14 @@ export async function runTask(taskId: string, deps: PipelineDeps, signal?: Abort
     emit('sources', { items: keptList.map((s) => ({ idx: s.idx, title: s.title, url: s.url, site: new URL(s.url).hostname, date: s.publishedAt ?? null })) });
     finish(finalStatus, { share_token: nanoid(12) });
     repo.cachePut(cacheKey(place.county, task.lat, task.lng, task.direction), taskId);
-    emit('done', { taskId, status: finalStatus, elapsedMs: Date.now() - t0, sourcesKept: keptList.length, scarcity, yuan: cost().yuan });
+    emit('done', { taskId, status: finalStatus, elapsedMs: Date.now() - t0, sourcesKept: keptList.length, scarcity, yuan: cost().yuan, reportChars: finalMd.length });
   } catch (e) {
     const code = e instanceof LlmAllFailedError ? 'llm_all_failed'
       : e instanceof SearchAllFailedError ? 'search_all_failed'
       : (e as Error)?.name === 'AbortError' ? 'timeout'
       : 'internal';
+    const msg = ((e as Error)?.message ?? String(e)).slice(0, 200); // 单行降噪,不打印 stack
+    repo.appendTimeline(taskId, { phase: 'failed', note: `${code}: ${msg}`, ts: Date.now() });
     finish('failed', { error_code: code, error_msg: (e as Error)?.message ?? String(e) });
     emit('error', { code, message: (e as Error)?.message ?? String(e), retryable: code !== 'internal' });
   }
@@ -252,8 +270,12 @@ export async function startResearch(input: ResearchInput): Promise<{ taskId: str
   const deps = defaultDeps();
   const key = cacheKey(input.place.county, input.lat, input.lng, input.direction);
   const hit = deps.repo.cacheGet(key);
-  if (hit) return { taskId: hit.task_id, cached: true };
+  if (hit) {
+    log.info('task.cache_hit', { taskId: hit.task_id, place: placeDisplayName(input.place), direction: input.direction });
+    return { taskId: hit.task_id, cached: true };
+  }
   const id = nanoid(12);
+  log.info('task.start', { taskId: id, place: placeDisplayName(input.place), direction: input.direction });
   deps.repo.createTask({ id, place_name: placeDisplayName(input.place), place_json: JSON.stringify(input.place), lat: input.lat, lng: input.lng, direction: input.direction, extra_instruction: input.extra });
   const ac = registry.register(id);
   const hardTimer = setTimeout(() => registry.abort(id), BUDGETS_MS.taskHard); // 硬上限看门狗:abort → AbortError → catch 归为 timeout

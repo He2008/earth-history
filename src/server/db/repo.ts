@@ -1,6 +1,8 @@
 import type Database from 'better-sqlite3';
 import { getDb } from './client';
 import { registry } from '@/server/orchestrator/machine';
+import { config } from '@/lib/config';
+import { log } from '@/server/obs/log';
 
 export interface TaskRow {
   id: string; status: string; place_name: string; place_json: string;
@@ -84,10 +86,10 @@ export function createRepo(db: Database.Database) {
     return r.expires_at < now() ? undefined : r;
   };
 
-  const sweepStaleTasks = (maxAgeMs = 5 * 60_000) =>
-    db.prepare(`UPDATE research_tasks SET status='failed', error_code='stale_task', error_msg='服务重启,任务中断', finished_at=?, updated_at=?
+  const sweepStaleTasks = (maxAgeMs = 5 * 60_000): number =>
+    Number(db.prepare(`UPDATE research_tasks SET status='failed', error_code='stale_task', error_msg='服务重启,任务中断', finished_at=?, updated_at=?
                 WHERE status NOT IN ('completed','scarce','failed') AND updated_at < ?`)
-      .run(now(), now(), now() - maxAgeMs);
+      .run(now(), now(), now() - maxAgeMs).changes);
 
   return { createTask, getTask, updateTask, appendTimeline, saveReportDelta, insertSource, updateSource, dropCandidates, listSources, cachePut, cacheGet, sweepStaleTasks };
 }
@@ -103,7 +105,9 @@ function ensureLifecycle(repo: Repo): void {
   try {
     // 安装即全量清扫:服务重启后,所有非终态任务(僵尸)不论新旧一律标 failed/stale_task。
     // maxAgeMs=0 → 条件退化为 updated_at < now,与年龄无关;不加周期定时器,重启即一次。
-    repo.sweepStaleTasks(0);
+    const swept = repo.sweepStaleTasks(0);
+    log.info('server.boot', { node: process.version, pid: process.pid, dbPath: config.DB_PATH });
+    if (swept > 0) log.warn('sweep.stale', { count: swept });
     if (process.env.NODE_ENV !== 'test') {
       const shutdown = () => {
         registry.abortAll();

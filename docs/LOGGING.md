@@ -1,6 +1,6 @@
 # D4 · 日志与可观测约定
 
-> 版本 v1(2026-10-23)· 状态:**待确认** · 兑现 TDD §12「结构化 stdout 日志」承诺,细则以本文为准
+> 版本 v1.1(2026-10-23)· 状态:**已确认**(补充:task.done 带 reportChars、新增 fetch.start)· 兑现 TDD §12「结构化 stdout 日志」承诺,细则以本文为准
 > 范围:M1 内测够用;日志采集/轮转/告警明确不做(PREP §5「不提前搭监控」继续有效)
 
 ---
@@ -40,9 +40,9 @@
 | event | level | 来源事件 | 专属字段 |
 |---|---|---|---|
 | phase | info | progress | phase, round?, note |
-| search.round | info | search_hit | round, query, engine, found, keptNew |
-| task.done | info | done | status, elapsedMs, sourcesKept, yuan |
-| task.fail | error | error | code, retryable |
+| search.round | info | search_hit | round, query, engine, found(本轮新增源数) |
+| task.done | info | done | status, elapsedMs, sourcesKept, yuan, scarcity, **reportChars**(终稿字符数——grep 此字段即可发现「成功但空正文」) |
+| task.fail | error | error | code, retryable, message |
 
 不转发:`task_created`(由 task.start/cache_hit 覆盖)、`content`(高频)、`sources`(DB 有)、`continue_polling`。
 
@@ -52,18 +52,19 @@
 |---|---|---|---|---|
 | task.start | info | pipeline.startResearch | 新任务真正起跑 | place, direction |
 | task.cache_hit | info | pipeline.startResearch | 30 天缓存命中回放(成本 0) | place, direction |
-| fetch.fail | warn | pipeline.ts fetching else 分支 | 单 URL 抓取失败(当前被静默丢弃) | idx, url, reason(robots/http_403/not_html/error) |
+| fetch.start | debug | pipeline.ts 抓取循环内、调 fetcher 前 | 每个URL开始抓取(默认关;「卡死时一片安静」的定位探针,开了就能看到卡在哪一秒) | idx, urlNorm |
+| fetch.fail | warn | pipeline.ts fetching else 分支 | 单 URL 抓取失败(当前被静默丢弃) | idx, urlNorm, reason(robots/http_403/not_html/error) |
 | fetch.summary | info | pipeline.ts fetching 结束 | 每任务抓取汇总 | ok, fail, reasons(计数字典) |
 | citations.invalid | warn | pipeline.ts 引用校验后 | 剔除幻觉引用 >0 | invalidCount |
 | search.degrade | warn | search/chain.ts catch | 某引擎失败换下一家 | engine, err |
 | search.all_failed | error | search/chain.ts 抛错前 | 全链失败 | tried[] |
 | llm.degrade | warn | llm/chain.ts catch | 重试/换家(当前无 taskId,见 §5) | provider, attempt, err |
-| circuit.open | warn | 两条 chain | 同家连续 3 失败熔断 5min | provider, retryAt |
+| circuit.open | warn | llm/chain.ts | 同家连续 3 失败熔断 5min | provider, retryAt |
 | sweep.stale | warn | repo.ensureLifecycle | 启动清扫僵尸任务 | count |
 | server.boot | info | repo.ensureLifecycle | 首次 getRepo(进程唯一入口) | node, pid, dbPath |
 | sse.client_abort | debug | api/research/route.ts abort | 客户端断开 SSE | — |
 
-合计:任务全程 info ≈ 10-15 行,debug 关闭时单任务日志量 < 2KB。
+合计:任务全程 info ≈ 10-15 行,debug 关闭时单任务日志量 < 2KB;`SHIDI_LOG_LEVEL=debug` 额外每 URL 一行 fetch.start。
 
 ## 4. 级别与开关
 
@@ -88,7 +89,7 @@
 - 新增单文件 `src/server/obs/log.ts`(≈40 行):`log.info/warn/error/debug(event, fields)`,级别过滤 + JSON 序列化 + test 静默;bus 白名单转发在 `events.ts` 的 `emit` 内挂 3 行
 - 落库配合:fetch else 分支同时把失败汇总 append 进 timeline(`第 N 轮抓取:ok X / fail Y(robots:2)`);catch 路径 append 一条 `{phase:'failed', note:error_code}`(修 Backlog「失败任务 timeline 无错误」)
 - 测试:`tests/log.test.ts` 断言 ①级别过滤 ②bus 白名单转发与 content 排除 ③fetch.fail 在失败 URL 时发出
-- 验收:生产模式跑 1 次研究,`server.log` 出现 §3 全部事件、单任务 < 2KB、`grep '"level":"warn"' server.log` 能回答"有没有降级"
+- 验收:生产模式跑 1 次研究,`server.log` 出现 §3 全部事件、单任务 < 2KB、`grep '"level":"warn"' server.log` 能回答"有没有降级";`grep task.done server.log` 的 reportChars 均明显 > 0(空正文探针)
 
 ## 7. 明确不做(P1 再议)
 
