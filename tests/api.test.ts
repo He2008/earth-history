@@ -56,6 +56,26 @@ async function readSse(resp: Response): Promise<string[]> {
   return events;
 }
 
+async function readSseFull(resp: Response): Promise<Array<{ event: string; data: unknown }>> {
+  const reader = resp.body!.getReader();
+  const dec = new TextDecoder();
+  let buf = '';
+  const events: Array<{ event: string; data: unknown }> = [];
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    buf += dec.decode(value);
+    let i: number;
+    while ((i = buf.indexOf('\n\n')) >= 0) {
+      const block = buf.slice(0, i); buf = buf.slice(i + 2);
+      const ev = block.match(/^event: (.+)$/m)?.[1];
+      const da = block.match(/^data: (.+)$/m)?.[1];
+      if (ev) events.push({ event: ev, data: da ? JSON.parse(da) : null });
+    }
+  }
+  return events;
+}
+
 describe('POST /api/research', () => {
   it('非法参数 → 400 invalid_params', async () => {
     const resp = await POST(new Request('http://x/api/research', { method: 'POST', body: JSON.stringify({ lat: 999, lng: 0, place: { province: 'a', county: 'b' }, direction: '综合沿革' }), headers: { 'content-type': 'application/json' } }));
@@ -70,6 +90,21 @@ describe('POST /api/research', () => {
     expect(events[0]).toBe('task_created');
     expect(events).toContain('content');
     expect(events[events.length - 1]).toBe('done');
+    expect(getRepo().getTask('t_api')!.status).toBe('completed');
+  });
+  it('缓存命中 → SSE 快路径 task_created(cached:true)/content/sources/done,流正常关闭', async () => {
+    setRunner({
+      async start() {
+        seedRunningTask();
+        repo.updateTask('t_api', { status: 'completed', report_md: '# 报告' });
+        return { taskId: 't_api', cached: true };
+      },
+    });
+    const resp = await POST(new Request('http://x/api/research', { method: 'POST', body: JSON.stringify(body), headers: { 'content-type': 'application/json' } }));
+    const events = await readSseFull(resp);
+    expect(events.map((e) => e.event)).toEqual(['task_created', 'content', 'sources', 'done']);
+    expect(events[0].data).toMatchObject({ taskId: 't_api', cached: true });
+    expect(events[1].data).toEqual({ delta: '# 报告' });
     expect(getRepo().getTask('t_api')!.status).toBe('completed');
   });
 });

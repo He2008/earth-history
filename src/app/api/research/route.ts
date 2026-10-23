@@ -33,11 +33,12 @@ export async function POST(req: Request): Promise<Response> {
   const stream = new ReadableStream<Uint8Array>({
     start(controller) {
       let closed = false;
+      let hb: ReturnType<typeof setInterval> | undefined;
       const send = (event: string, data: unknown) => controller.enqueue(enc.encode(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`));
       const close = () => {
         if (closed) return;
         closed = true;
-        clearInterval(hb);
+        if (hb) clearInterval(hb);
         try { controller.close(); } catch { /* already closed */ }
       };
       const task = () => repo.getTask(taskId)!;
@@ -54,7 +55,7 @@ export async function POST(req: Request): Promise<Response> {
         send(e.event, e.data);
         if (e.event === 'done' || e.event === 'error') { unsub(); close(); }
       });
-      const hb = setInterval(() => { if (!closed) { try { controller.enqueue(enc.encode(': ping\n\n')); } catch { /* noop */ } } }, 15_000);
+      hb = setInterval(() => { if (!closed) { try { controller.enqueue(enc.encode(': ping\n\n')); } catch { /* noop */ } } }, 15_000);
       req.signal.addEventListener('abort', () => { unsub(); close(); });
     },
   });

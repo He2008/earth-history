@@ -1,5 +1,6 @@
 import type Database from 'better-sqlite3';
 import { getDb } from './client';
+import { registry } from '@/server/orchestrator/machine';
 
 export interface TaskRow {
   id: string; status: string; place_name: string; place_json: string;
@@ -94,8 +95,29 @@ export function createRepo(db: Database.Database) {
 export type Repo = ReturnType<typeof createRepo>;
 
 let _repo: Repo | undefined;
+let _lifecycle = false;
+
+function ensureLifecycle(repo: Repo): void {
+  if (_lifecycle) return;
+  _lifecycle = true;
+  try {
+    repo.sweepStaleTasks();
+    const shutdown = () => {
+      registry.abortAll();
+      setTimeout(() => process.exit(0), 500);
+    };
+    process.on('SIGTERM', shutdown);
+    process.on('SIGINT', shutdown);
+  } catch {
+    // 防御:dev HMR 重复导入等场景下不得让 getRepo() 抛错
+  }
+}
+
 export function getRepo(): Repo {
-  if (!_repo) _repo = createRepo(getDb());
+  if (!_repo) {
+    _repo = createRepo(getDb());
+    ensureLifecycle(_repo);
+  }
   return _repo;
 }
 
