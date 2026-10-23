@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { Map as MlMap, Marker, type MapMouseEvent } from 'maplibre-gl';
 import 'maplibre-gl/dist/maplibre-gl.css';
+import { GLOBE } from '@/lib/map-tokens';
 
 // F1 3D 卫星地球:天地图影像 + 中文注记双层,空闲自转,交互即停;点击返回经纬度
 export function Globe({ tdtKey, onPick, busy }: {
@@ -33,7 +34,7 @@ export function Globe({ tdtKey, onPick, busy }: {
           'tdt-cia': { type: 'raster', tiles: tiles('cia'), tileSize: 256, maxzoom: 18 },
         },
         layers: [
-          { id: 'space', type: 'background', paint: { 'background-color': '#04060a' } },
+          { id: 'space', type: 'background', paint: { 'background-color': GLOBE.space } },
           { id: 'satellite', type: 'raster', source: 'tdt-img' },
           { id: 'labels', type: 'raster', source: 'tdt-cia' },
         ],
@@ -67,7 +68,7 @@ export function Globe({ tdtKey, onPick, busy }: {
       stopSpin();
       const { lat, lng } = e.lngLat;
       if (!markerRef.current) {
-        markerRef.current = new Marker({ color: '#6fe3a5' }).setLngLat([lng, lat]).addTo(map);
+        markerRef.current = new Marker({ color: GLOBE.marker }).setLngLat([lng, lat]).addTo(map);
       } else {
         markerRef.current.setLngLat([lng, lat]);
       }

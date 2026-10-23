@@ -1,0 +1,164 @@
+{
+  "$schema": "https://design-tokens.github.io/community-group/format/",
+  "$description": "Europa Design Tokens v1.0.0 — primitive values. Values are implementation-ready starting points, not official game assets.",
+  "color": {
+    "palette": {
+      "paper": {
+        "50": "#FBF6EB",
+        "100": "#F0E5CC",
+        "200": "#E8DCC0",
+        "300": "#D9CBAA",
+        "400": "#B8A47C",
+        "500": "#978260",
+        "600": "#786A55"
+      },
+      "gold": {
+        "50": "#F4E8C8",
+        "100": "#E7D09A",
+        "200": "#C6A15B",
+        "300": "#A9823E",
+        "400": "#80612E",
+        "500": "#58421F"
+      },
+      "navy": {
+        "50": "#E6EDF1",
+        "100": "#C0D0DC",
+        "150": "#93A8BA",
+        "200": "#8198AA",
+        "300": "#526D82",
+        "400": "#243748",
+        "500": "#16232F"
+      },
+      "burgundy": {
+        "50": "#F5E7E5",
+        "100": "#E4C3BF",
+        "200": "#C67E78",
+        "300": "#A34D49",
+        "400": "#772F35",
+        "500": "#501D24"
+      },
+      "forest": {
+        "50": "#E8EEE4",
+        "100": "#C5D3BB",
+        "200": "#91A582",
+        "300": "#6D845F",
+        "400": "#52684B",
+        "500": "#354832"
+      },
+      "ink": {
+        "50": "#F1ECE3",
+        "100": "#D9CFC0",
+        "200": "#B0A28F",
+        "300": "#786A55",
+        "350": "#5E5039",
+        "400": "#514233",
+        "500": "#382C22"
+      },
+      "blue": {
+        "50": "#E6EDF1",
+        "100": "#C0D0DC",
+        "200": "#8198AA",
+        "300": "#526D82",
+        "400": "#365A78",
+        "500": "#243748"
+      },
+      "red": {
+        "50": "#F5E7E5",
+        "100": "#E4C3BF",
+        "200": "#C67E78",
+        "300": "#A34D49",
+        "400": "#8D302A",
+        "500": "#501D24"
+      },
+      "amber": {
+        "50": "#F7EEDC",
+        "100": "#E7BD73",
+        "200": "#B17B32",
+        "300": "#8A5B1D",
+        "400": "#6B4518"
+      },
+      "white": "#FFFFFF",
+      "black": "#000000"
+    }
+  },
+  "space": {
+    "0": "0px",
+    "1": "4px",
+    "2": "8px",
+    "3": "12px",
+    "4": "16px",
+    "5": "20px",
+    "6": "24px",
+    "8": "32px",
+    "10": "40px",
+    "12": "48px",
+    "16": "64px"
+  },
+  "size": {
+    "control-sm": "28px",
+    "control-md": "36px",
+    "control-lg": "44px",
+    "sidebar": "240px",
+    "content-max": "1440px"
+  },
+  "radius": {
+    "none": "0px",
+    "xs": "2px",
+    "sm": "3px",
+    "md": "6px",
+    "lg": "10px",
+    "xl": "14px",
+    "full": "9999px"
+  },
+  "border": {
+    "width-thin": "1px",
+    "width-strong": "2px"
+  },
+  "font": {
+    "family": {
+      "display": "Georgia, \"Noto Serif SC\", \"Songti SC\", serif",
+      "body": "-apple-system, BlinkMacSystemFont, \"PingFang SC\", \"Microsoft YaHei\", sans-serif",
+      "mono": "\"SFMono-Regular\", Consolas, \"Liberation Mono\", monospace"
+    },
+    "size": {
+      "xs": "12px",
+      "sm": "14px",
+      "md": "16px",
+      "lg": "20px",
+      "xl": "24px",
+      "2xl": "28px",
+      "display": "32px"
+    },
+    "weight": {
+      "regular": 400,
+      "medium": 500,
+      "semibold": 600,
+      "bold": 700
+    },
+    "line-height": {
+      "tight": 1.25,
+      "normal": 1.5,
+      "relaxed": 1.6
+    }
+  },
+  "shadow": {
+    "panel": "0 3px 10px #382C2220",
+    "popover": "0 8px 24px #171D2430",
+    "modal": "0 12px 32px #171D2480"
+  },
+  "motion": {
+    "duration-fast": "120ms",
+    "duration-normal": "180ms",
+    "duration-slow": "240ms",
+    "easing-standard": "cubic-bezier(0.2, 0, 0, 1)"
+  },
+  "z-index": {
+    "base": 0,
+    "sticky": 200,
+    "dropdown": 300,
+    "overlay": 400,
+    "modal": 500,
+    "toast": 700,
+    "tooltip": 800
+  }
+}

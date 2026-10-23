@@ -56,7 +56,7 @@ export function ResearchPanel({ state, placeName }: { state: ResearchFeedState; 
         </div>
       ) : null}
       {state.status === 'failed' && state.error && (
-        <p style={{ color: 'var(--danger)', margin: '12px 0 0', fontSize: 14 }}>
+        <p style={{ color: 'var(--status-danger)', margin: '12px 0 0', fontSize: 14 }}>
           {state.error.code === 'llm_all_failed' ? '模型链路全部失败,稍后重试。' : state.error.code === 'search_all_failed' ? '搜索链路全部失败,稍后重试。' : `研究失败:${state.error.message}`}
         </p>
       )}

@@ -12,8 +12,9 @@ export function ReportView({ reportMd, scarcity, meta }: {
   if (meta?.elapsedMs) bits.push(`${Math.round(meta.elapsedMs / 1000)}s`);
   if (meta?.yuan != null) bits.push(`¥${meta.yuan.toFixed(2)}`);
 
+  // 档案模式:羊皮纸图版(atlas 主题),研究页与分享页共用
   return (
-    <article>
+    <article data-theme="atlas" className="archive">
       {scarcity && (
         <div className="scarce-banner" role="status">
           <span>⚠</span>

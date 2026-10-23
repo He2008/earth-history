@@ -34,8 +34,8 @@ export function ReportActions({ taskId, shareToken }: { taskId: string; shareTok
       )}
       <span style={{ flex: 1 }} />
       <span className="faint" style={{ fontSize: 13 }}>这份报告有用吗</span>
-      <button className="btn btn-small" aria-label="满意" aria-pressed={vote === 1} disabled={vote !== null} onClick={() => send(1)} style={{ color: vote === 1 ? 'var(--accent)' : undefined }}>👍</button>
-      <button className="btn btn-small" aria-label="不满意" aria-pressed={vote === -1} disabled={vote !== null} onClick={() => send(-1)} style={{ color: vote === -1 ? 'var(--danger)' : undefined }}>👎</button>
+      <button className="btn btn-small" aria-label="满意" aria-pressed={vote === 1} disabled={vote !== null} onClick={() => send(1)} style={{ color: vote === 1 ? 'var(--status-success)' : undefined }}>👍</button>
+      <button className="btn btn-small" aria-label="不满意" aria-pressed={vote === -1} disabled={vote !== null} onClick={() => send(-1)} style={{ color: vote === -1 ? 'var(--status-danger)' : undefined }}>👎</button>
     </div>
   );
 }

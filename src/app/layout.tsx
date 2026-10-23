@@ -1,4 +1,5 @@
 import type { Metadata } from 'next';
+import './tokens.css';
 import './globals.css';
 
 export const metadata: Metadata = {
@@ -8,7 +9,7 @@ export const metadata: Metadata = {
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="zh-CN">
+    <html lang="zh-CN" data-theme="court">
       <body>
         <a className="skip-link" href="#main-content">跳到主要内容</a>
         {children}
