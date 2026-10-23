@@ -9,6 +9,23 @@ export function cleanTitle(raw: string): string {
   return t.slice(0, 60);
 }
 
+// 文档类 URL(PDF/Office)没有页面标题,搜索引擎常把正文残句当标题(实测「三伍」「陆续送川」)。
+// 残句(清洗后 <6 字)时改用 snippet 提炼:优先 markdown 标题行,其次首个逗号子句。
+const JUNK_TITLE_MAX = 6;
+const DOC_EXT = /\.(pdf|docx?|pptx?|xlsx?)(?:[?#]|$)/i;
+
+export function sourceTitle(hit: { title: string; url: string; snippet: string }): string {
+  const cleaned = cleanTitle(hit.title);
+  if (cleaned.length >= JUNK_TITLE_MAX || !DOC_EXT.test(hit.url)) return cleaned;
+  const lines = hit.snippet.split('\n').map((l) => l.trim()).filter(Boolean);
+  const heading = lines.find((l) => /^#{1,3}\s+(.{2,40})$/.exec(l));
+  const headingText = heading ? /^#{1,3}\s+(.+)$/.exec(heading)![1].trim() : null;
+  if (headingText) return headingText.slice(0, 40);
+  const clause = hit.snippet.match(/([^,，]{8,40})[,，]/);
+  if (clause) return clause[1].trim();
+  return cleaned;
+}
+
 export function buildSourcePack(kept: SourceLike[]): string {
   return kept
     .map((s) => {

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { buildSourcePack, validateCitations, cleanTitle, extractCitedSentence, hasCitation } from '@/server/orchestrator/citations';
+import { buildSourcePack, validateCitations, cleanTitle, extractCitedSentence, hasCitation, sourceTitle } from '@/server/orchestrator/citations';
 
 describe('buildSourcePack', () => {
   it('编号·标题·域名·日期+摘要', () => {
@@ -50,6 +50,33 @@ describe('hasCitation(编号精确匹配)', () => {
     expect(hasCitation('文[12]尾', 1)).toBe(false);
     expect(hasCitation('文[12]尾', 12)).toBe(true);
     expect(hasCitation('文[1]尾', 1)).toBe(true);
+  });
+});
+
+describe('sourceTitle(PDF 残句标题兜底)', () => {
+  it('文档 URL + 残句标题(<6字)→ 用 snippet 标题行替换(实测「三伍」案例)', () => {
+    const t = sourceTitle({ title: '三伍', url: 'http://scdfz.sc.gov.cn/a/b.pdf', snippet: '# 辛亥秋保路死事纪念碑  \n\n辛亥秋保路死事纪念碑位于成都市人民公园内' });
+    expect(t).toBe('辛亥秋保路死事纪念碑');
+  });
+  it('文档 URL + 残句标题 → 无标题行时取 snippet 首个逗号子句(实测「陆续送川」案例)', () => {
+    const t = sourceTitle({ title: '陆续送川', url: 'http://scdfz.sc.gov.cn/a/c.pdf', snippet: '康熙五十七年(1718年),四川总督年羹尧上疏“成都驻扎满兵,……其官属兵房' });
+    expect(t).toBe('康熙五十七年(1718年)');
+  });
+  it('文档 URL + 信息量足够的标题 → 保留(实测康熙重修成都城案例)', () => {
+    const t = sourceTitle({ title: '清康熙初,四川巡抚张德地捐资重修成都城', url: 'http://scdfz.sc.gov.cn/a/d.pdf', snippet: '任意' });
+    expect(t).toBe('清康熙初,四川巡抚张德地捐资重修成都城');
+  });
+  it('非文档 URL 的短标题不替换(「少城」是合法标题)', () => {
+    const t = sourceTitle({ title: '少城', url: 'https://baike.baidu.com/item/x', snippet: '成都老城区西部区域' });
+    expect(t).toBe('少城');
+  });
+  it('文档残句但 snippet 无可用料 → cleanTitle 兜底', () => {
+    const t = sourceTitle({ title: '三伍', url: 'http://x.gov.cn/a.pdf', snippet: '' });
+    expect(t).toBe('三伍');
+  });
+  it('仍走 cleanTitle 清洗(HTML/超长)', () => {
+    const t = sourceTitle({ title: '<b>少城</b> - 少城', url: 'https://a.com/x', snippet: '' });
+    expect(t).toBe('少城');
   });
 });
 

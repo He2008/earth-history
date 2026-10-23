@@ -27,6 +27,7 @@
 - 状态机 GRAPH 键值加 State 字面量类型;canTransition 生产未调用(纯校验件);register 重复 id 覆盖;shutdown 无幂等防重入。
 - citations:`[1234]` 4 位编号不剔除;markdown 链接剔除后残留孤立 `(url)`;published_at 空串显示空白。
 - normalizeUrl:try/catch 兜底畸形 URL;`httpx://` 误匹配;追踪参数删除大小写敏感。
+  - 2026-10-23 已做大半(m1-backlog,浆洗街任务实测驱动):try/catch 兜底、追踪参数大小写不敏感删除(含 bst/svcp_stk)、百科移动域折叠(wapbaike/zh.m.wikipedia)、维基繁简变体路径归一——同词条三副面孔进来源列表的问题随之消失;`httpx://` 误匹配未动。另:PDF 残句标题(「三伍」「陆续送川」)由 sourceTitle 以 snippet 标题行/首子句兜底。
 - readability:实体双重解码/十六进制实体/代理对截断;htmlToText 截断无测试。
 - `.superpowers/` 加进仓库 .gitignore(目前靠全局 excludesfile);测试 NODE_ENV 守卫已做,HMR 监听器堆叠为 dev 噪音。
 - run-m0:`dukeong` slug 非标准拼写(独克宗);catch 路径不写 .md。

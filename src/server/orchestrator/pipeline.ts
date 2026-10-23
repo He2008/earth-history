@@ -16,7 +16,7 @@ import type { Fetcher } from '@/server/providers/fetch/fetcher';
 import { createFetcher, RobotsGuard } from '@/server/providers/fetch/fetcher';
 import { planningMessages, synthesisMessages, scarceMessages, parsePlan } from '@/private/prompts';
 import { log } from '@/server/obs/log';
-import { buildSourcePack, validateCitations, cleanTitle, extractCitedSentence, hasCitation } from './citations';
+import { buildSourcePack, validateCitations, sourceTitle, extractCitedSentence, hasCitation } from './citations';
 import { bus } from './events';
 import { registry, BUDGETS_MS } from './machine';
 import type { SearchHit } from '@/server/providers/search/types';
@@ -164,7 +164,7 @@ export async function runTask(taskId: string, deps: PipelineDeps, signal?: Abort
       .map((hit) => ({ hit, score: scoreHit(hit, task.place_name) }))
       .sort((a, b) => b.score - a.score)
       .slice(0, cfg.REPORT_MAX_SOURCES)
-      .map((x, i) => ({ ...x.hit, title: cleanTitle(x.hit.title), idx: i + 1, score: x.score }));
+      .map((x, i) => ({ ...x.hit, title: sourceTitle(x.hit), idx: i + 1, score: x.score }));
     repo.dropCandidates(taskId);
     const rowIdByUrlNorm = new Map<string, number>();
     for (const k of keptList) {
