@@ -19,7 +19,7 @@
 │ MapLibre 地球 │ ──────────────────→ │ orchestrator               │
 │ + 研究面板    │ ←───── SSE 流 ────── │  machine/pipeline/citations│
 └──────────────┘                     │  ├ search: DeepSeek→博查(降级链)│
-  刷新/断线 → GET /:id、/:id/poll     │  ├ llm:    DeepSeek→智谱GLM │
+  刷新/断线 → GET /:id、/:id/poll     │  ├ llm:    DeepSeek(GLM 备用·默认不接线)│
                                      │  ├ fetch:  readability     │
                                      │  └ geocode:天地图→县界兜底  │
                                      │ db(SQLite):tasks/sources/cache│
@@ -56,7 +56,8 @@ src/
 
 ```
 queued → planning → searching → fetching → synthesizing → completed
-                                  ↓(kept 源 < 3)              ↘ scarce
+                          ↓(kept<3,判定在 fetching 前,§8 步骤 3)
+                          scarce →(降级成文实际经过 synthesizing 相位,再回 scarce 终态)
 任一非终态 ────────────────────────→ failed(超时/熔断/异常)
 ```
 
@@ -125,6 +126,8 @@ CREATE TABLE research_cache (
 
 错误统一 `{error:{code,message}}`;code ∈ `invalid_params | geocode_failed | search_all_failed | llm_all_failed | timeout | stale_task | not_found | internal`。
 
+> 交付状态:M0 已实现 research / :id / :id/poll;geocode、feedback、share 三端点已于 2026-10-23 在 m1-backlog 落地。
+
 | 端点 | 方法 | 用途 | 请求 | 成功响应 |
 |---|---|---|---|---|
 | /api/geocode | GET | F2 逆地理编码 | `?lat=&lng=` | `{place:{province,city,county,village?},source}` |
@@ -157,7 +160,7 @@ CREATE TABLE research_cache (
 | search_hit | `{round, query, engine, found, kept:[{idx,title,url,snippet}]}` | 每轮搜索完成 |
 | content | `{delta:"…"}` | 报告 markdown 增量 |
 | sources | `{items:[{idx,title,url,site,date}]}` | 引用列表定稿(done 前) |
-| done | `{taskId, status:'completed'\|'scarce', elapsedMs, sourcesKept, scarcity, yuan}` | 终态 |
+| done | `{taskId, status:'completed'\|'scarce', elapsedMs, sourcesKept, scarcity, yuan, reportChars(终稿字符数,空报告探针);cached 快路径另带 cached:true}` | 终态 |
 | error | `{code, message, retryable}` | 失败终态 |
 | continue_polling | `{taskId, intervalMs:3000}` | 服务端主动断流前;客户端连续 2 次 EventSource error 也自行切换 |
 
@@ -236,11 +239,14 @@ run(task):
 
 | 环境变量 | 用途 |
 |---|---|
-| BOCHA_API_KEY / ZHIPU_API_KEY / DEEPSEEK_API_KEY | 三把 key(PREP 1.1/1.1b/1.2) |
-| TIANDITU_KEY_SERVER / TIANDITU_KEY_BROWSER | 逆编码 / 瓦片,分 key 管理 |
+| DEEPSEEK_API_KEY | **唯一必需**(搜索+LLM 一把 key) |
+| BOCHA_API_KEY / ZHIPU_API_KEY | 可选:搜索兜底 / A-B 对照(PREP 1.1/1.1b) |
+| TIANDITU_KEY_SERVER / TIANDITU_KEY_BROWSER | 逆编码 / 瓦片,分 key 管理(M1) |
 | SEARCH_MODE = deepseek(默认)\|bocha\|zhipu\|ab | 搜索主力选择,M0 A/B 用不同模式各跑一遍 |
 | SCARCITY_THRESHOLD=3 / REPORT_MAX_SOURCES=12 / FETCH_CONCURRENCY=4 | 流水线阈值 |
-| DEEPSEEK_MODEL=deepseek-chat / LLM_BACKUP_MODEL=glm-4-flash | 主/备 LLM 模型名 |
+| DEEPSEEK_MODEL=deepseek-flash / LLM_BACKUP_MODEL=glm-4-flash | 主/备 LLM 模型名 |
+| DB_PATH=data/shidi.db | SQLite 路径 |
+| SHIDI_LOG_LEVEL=info(默认)\|debug\|warn\|error | 结构化日志级别(D4,docs/LOGGING.md) |
 
 密钥仅服务端;浏览器可见的只有 TIANDITU_KEY_BROWSER。
 
