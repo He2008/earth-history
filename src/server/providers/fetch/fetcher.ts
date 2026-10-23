@@ -28,21 +28,22 @@ export class RobotsGuard {
 function parseDisallow(txt: string): string[] {
   const lines = txt.split(/\r?\n/).map((l) => l.replace(/#.*$/, '').trim());
   const groups: Array<{ agents: string[]; disallow: string[] }> = [];
+  let current: { agents: string[]; disallow: string[] } | null = null;
   for (const line of lines) {
     const m = line.match(/^(user-agent|disallow)\s*:\s*(.*)$/i);
     if (!m) continue;
     const [, key, val] = m;
     if (key.toLowerCase() === 'user-agent') {
-      groups.push({ agents: [val.toLowerCase()], disallow: [] });
-    } else {
-      for (let i = groups.length - 1; i >= 0; i--) {
-        if (groups[i].agents.includes('*')) groups[i].disallow.push(val);
-        else break;
+      if (current && current.disallow.length === 0) current.agents.push(val.toLowerCase());
+      else {
+        current = { agents: [val.toLowerCase()], disallow: [] };
+        groups.push(current);
       }
+    } else if (current) {
+      current.disallow.push(val);
     }
   }
-  const star = groups.filter((g) => g.agents.includes('*'));
-  return star.flatMap((g) => g.disallow);
+  return groups.filter((g) => g.agents.includes('*')).flatMap((g) => g.disallow);
 }
 
 export function createFetcher(robots: RobotsGuard, fetchImpl: FetchImpl = globalThis.fetch as FetchImpl): Fetcher {

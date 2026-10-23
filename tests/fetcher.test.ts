@@ -28,6 +28,17 @@ describe('RobotsGuard + fetcher', () => {
     expect(page.reason).toBe('robots');
     expect(pageFetch).not.toHaveBeenCalled();
   });
+  it('连续 UA 行合并分组:* 在前不丢 Disallow 规则', async () => {
+    const fetchImpl = vi.fn(async () => new Response('User-agent: *\nUser-agent: GPTBot\nDisallow: /private/', { status: 200 }));
+    const guard = new RobotsGuard(fetchImpl as any);
+    expect(await guard.allowed('https://a.com/private/x')).toBe(false);
+    expect(await guard.allowed('https://a.com/public/x')).toBe(true);
+  });
+  it('连续 UA 行合并分组:* 在后同样生效', async () => {
+    const fetchImpl = vi.fn(async () => new Response('User-agent: GPTBot\nUser-agent: *\nDisallow: /x', { status: 200 }));
+    const guard = new RobotsGuard(fetchImpl as any);
+    expect(await guard.allowed('https://b.com/x/y')).toBe(false);
+  });
   it('正常抓取 → 提取正文', async () => {
     const fetchImpl = vi.fn(async (url: any) => String(url).endsWith('/robots.txt')
       ? new Response('User-agent: *\nDisallow:', { status: 200 })
