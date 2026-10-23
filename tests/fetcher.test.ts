@@ -57,6 +57,34 @@ describe('RobotsGuard + fetcher', () => {
     const fetcher = createFetcher(new RobotsGuard(fetchImpl as any), fetchImpl as any);
     expect((await fetcher.fetch('https://z.com/api')).reason).toBe('not_html');
   });
+  it('响应体超过字节上限被截断,超限内容不进堆(防 OOM)', async () => {
+    // 100 字节上限:开头小内容保留,后面的巨段被丢弃
+    const big = 'A'.repeat(500_000);
+    const fetchImpl = vi.fn(async (url: any) => String(url).endsWith('/robots.txt')
+      ? new Response('User-agent: *\nDisallow:', { status: 200 })
+      : new Response(`<html><head><title>T</title></head><body><p>开头段</p><p>${big}</p></body></html>`, { headers: { 'content-type': 'text/html' } }));
+    const fetcher = createFetcher(new RobotsGuard(fetchImpl as any), fetchImpl as any, 100);
+    const page = await fetcher.fetch('https://cap.com/doc');
+    expect(page.ok).toBe(true);
+    expect(page.text).toContain('开头段');
+    expect(page.chars).toBeLessThanOrEqual(8000);
+    expect(page.text).not.toContain(big.slice(0, 1000));
+  });
+  it('robots.txt 挂死 → 超时放行(fail-open),不卡抓取阶段', async () => {
+    // 模拟挂死连接:永不主动返回,但(像真实 fetch 一样)随 abort 信号拒绝
+    const hangingRobots = (_url: any, init?: any) => new Promise<Response>((_, rej) => {
+      init?.signal?.addEventListener('abort', () => rej(Object.assign(new Error('aborted'), { name: 'AbortError' })));
+    });
+    const fetchImpl = vi.fn(async (url: any, init?: any) => String(url).endsWith('/robots.txt')
+      ? hangingRobots(url, init)
+      : new Response('<html><head><title>T</title></head><body><p>正文</p></body></html>', { headers: { 'content-type': 'text/html' } }));
+    const fetcher = createFetcher(new RobotsGuard(fetchImpl as any, 20), fetchImpl as any);
+    const t0 = Date.now();
+    const page = await fetcher.fetch('https://hang.com/doc');
+    expect(page.ok).toBe(true);          // robots 超时 → 放行 → 正常抓到页面
+    expect(page.text).toContain('正文');
+    expect(Date.now() - t0).toBeLessThan(2_000); // 不是靠外层 15s 超时兜的
+  });
 });
 
 import { vi } from 'vitest';

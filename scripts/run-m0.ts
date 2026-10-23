@@ -20,6 +20,7 @@ async function runOne(loc: (typeof locations)[number]): Promise<SummaryRow> {
   let status = 'unknown';
   let sourcesKept = 0;
   let yuan = 0;
+  let taskId = '';
   const reader = resp.body!.getReader();
   const dec = new TextDecoder();
   let buf = '';
@@ -33,10 +34,19 @@ async function runOne(loc: (typeof locations)[number]): Promise<SummaryRow> {
       buf = buf.slice(i + 2);
       if (!parsed) continue;
       if (parsed.event === 'progress' || parsed.event === 'search_hit') console.log(`  [${loc.slug}] ${parsed.event}: ${String(parsed.data.note ?? parsed.data.query ?? '')}`);
+      if (parsed.event === 'task_created') taskId = parsed.data.taskId ?? '';
       if (parsed.event === 'content') md += parsed.data.delta ?? '';
       if (parsed.event === 'done') { status = parsed.data.status; sourcesKept = parsed.data.sourcesKept ?? 0; yuan = parsed.data.yuan ?? 0; }
       if (parsed.event === 'error') status = `failed:${parsed.data.code}`;
     }
+  }
+  // 报告以 DB 终稿为准(一切状态可从 DB 重建);流式增量仅作兜底——
+  // dev 模式下 Next 的流式转发层可能丢高频 content 事件,但 DB 始终完整
+  if (taskId && (status === 'completed' || status === 'scarce')) {
+    try {
+      const t = await (await fetch(`${BASE}/api/research/${taskId}`)).json();
+      if (t?.task?.report_md) md = t.task.report_md;
+    } catch { /* 兜底:用已收到的流式增量 */ }
   }
   writeFileSync(path.join(OUT, `${loc.slug}.md`), `# ${loc.name}\n\n${md}\n`);
   return { name: loc.name, slug: loc.slug, status, sourcesKept, yuan, elapsedMs: Date.now() - t0 };

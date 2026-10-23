@@ -15,13 +15,14 @@ export function migrate(db: Database.Database): void {
   db.exec(SCHEMA_SQL);
 }
 
-let _db: Database.Database | undefined;
+// Next dev HMR 会重载本模块:用 globalThis 缓存连接,避免旧 Database/Statement 沦为孤儿对象被 GC 析构(v11 在 Node24 上曾因此崩溃,升级 v13 N-API 后此为防御)
+const g = globalThis as { __shidi_db?: Database.Database };
 export function getDb(): Database.Database {
-  if (!_db) {
-    _db = openDb(config.DB_PATH);
-    migrate(_db);
+  if (!g.__shidi_db) {
+    g.__shidi_db = openDb(config.DB_PATH);
+    migrate(g.__shidi_db);
   }
-  return _db;
+  return g.__shidi_db;
 }
 
-export function __setDbForTests(db: Database.Database): void { _db = db; migrate(db); }
+export function __setDbForTests(db: Database.Database): void { g.__shidi_db = db; migrate(db); }

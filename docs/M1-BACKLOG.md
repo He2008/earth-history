@@ -27,3 +27,9 @@
 - `.superpowers/` 加进仓库 .gitignore(目前靠全局 excludesfile);测试 NODE_ENV 守卫已做,HMR 监听器堆叠为 dev 噪音。
 - run-m0:`dukeong` slug 非标准拼写(独克宗);catch 路径不写 .md。
 - parsePlan 兜底过滤丢弃 2-4 字符问题;prompts.ts 加"拆私有仓库"出处头注释(M0 结束拆分时一并做)。
+
+## 追加(2026-10-23 跑分实战)
+
+- ~~OOM 崩溃链~~ 已修:fetcher 响应体 2MB 字节上限(曾致 node V8 堆耗尽崩溃,连杀整批任务);robots.txt 5s 超时+接入任务信号(曾致抓取阶段挂死 14 分钟,且硬上限 abort 打不断)。
+- dev 模式 SSE 中继会随机丢高频 content 事件(生产模式正常):跑分脚本已改为 done 后从 `GET /api/research/:id` 取 DB 终稿回写;M1 若要在 dev 下调试流式 UI 再查 Next dev 流转发层。
+- `next start` 与 `output: standalone` 有不兼容警告但实测可用;正式部署用 `node .next/standalone/server.js`。

@@ -10,7 +10,7 @@
     "m0": "tsx scripts/run-m0.ts"
   },
   "dependencies": {
-    "better-sqlite3": "^11.3.0",
+    "better-sqlite3": "^13.0.3",
     "nanoid": "^5.0.7",
     "next": "^15.0.0",
     "react": "^19.0.0",

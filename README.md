@@ -6,8 +6,24 @@
 
 ```bash
 npm install          # .npmrc 已指向 npmmirror
-cp .env.example .env # 填三把 key(博查/智谱/DeepSeek),PREP §1
+cp .env.example .env # 填 DeepSeek key 即可开工(博查/智谱为可选兜底/A-B)
 npm test             # 全部测试,不需要真实 key
-npm run dev          # 起服务
-npm run m0           # 跑 D3 十地点验证(需要 key,先起 dev)
 ```
+
+## 跑 D3 验证(十地点报告)
+
+```bash
+npm run build && npm run start   # 生产模式起服务
+npm run m0                       # 另开终端跑十地点,产出 reports/<时间戳>/ 报告 + summary.csv
+```
+
+**注意:跑分请用生产模式。** `next dev` 的流式转发层可能随机丢弃高频 SSE `content` 事件
+(表现为报告文件为空/截断,但任务状态正常、数据库终稿完整);跑分脚本已改为以 DB 终稿
+回写报告(`GET /api/research/:id`),流式增量仅作兜底,但进度展示仍建议用生产模式。
+dev 模式适合日常开发调试,内存占用也更高。
+
+## 常用
+
+- `npm run dev` 开发服务 / `npm run start` 生产服务(`output: standalone` 下有警告但可用)
+- `SEARCH_MODE=deepseek|bocha|zhipu|ab` 切换搜索主力(D3 三方 A/B 用)
+- 报告与来源全部落 SQLite(`data/shidi.db`),断线/刷新可从 `GET /api/research/:id` 恢复
