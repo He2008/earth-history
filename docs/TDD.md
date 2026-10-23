@@ -18,7 +18,7 @@
 ┌──────────────┐  POST /api/research  ┌────────────────────────────┐
 │ MapLibre 地球 │ ──────────────────→ │ orchestrator               │
 │ + 研究面板    │ ←───── SSE 流 ────── │  machine/pipeline/citations│
-└──────────────┘                     │  ├ search: 博查→智谱(降级链)│
+└──────────────┘                     │  ├ search: DeepSeek→博查(降级链)│
   刷新/断线 → GET /:id、/:id/poll     │  ├ llm:    DeepSeek→智谱GLM │
                                      │  ├ fetch:  readability     │
                                      │  └ geocode:天地图→县界兜底  │
@@ -193,9 +193,9 @@ interface Fetcher { fetch(url: string, signal?: AbortSignal): Promise<FetchedPag
 // readability 去噪,正文截断 ~8K 字;预留 og:image 字段(P1 配图管线)
 ```
 
-- **降级链**:LLM `[deepseek → qwen(智谱 GLM)]`。DeepSeek 直连 api.deepseek.com;备用 provider 复用智谱 key 走其 OpenAI 兼容端点(open.bigmodel.cn/api/paas/v4),模型 `LLM_BACKUP_MODEL`(默认 glm-4-flash)——避免第四把 key,与 PRD §5.3「GLM 备用 LLM」一致。策略:超时/5xx → 同家重试 1 次 → 下一家;同家连续 3 次失败 → 进程内熔断 5 分钟
+- **降级链**:Search `[deepseek → bocha]`(`SEARCH_MODE=ab` 时三家全链 deepseek→bocha→zhipu_std)。DeepSeek Search API(2026,`POST /v1/tools/search`,$0.75/千次 ≈ ¥0.005/次,仅成功计费,自带 rerank_score/authority,`lang:zh` 支持)为默认主力;博查兜底(有 key 时自动生效)。LLM `[deepseek]` 单链——智谱 GLM 备用适配器已实现(qwen.ts,走智谱 OpenAI 兼容端点 + `LLM_BACKUP_MODEL`)但默认不接线。策略:超时/5xx → 同家重试 1 次 → 下一家;同家连续 3 次失败 → 进程内熔断 5 分钟
 - **每调用超时组合**:搜索/抓取的 15s 上限与任务级 signal 用 `AbortSignal.any` 组合(管线传 signal 时 15s 仍生效);LLM 调用按阶段预算组合(planning 60s / synthesize 180s / scarce 90s)
-- **轮次引擎策略**(可配置):R1 广搜 bocha(count=10)→ R2+ 缺口补搜 zhipu_std → R3+ 深挖 zhipu_sogou(知乎/腾讯生态);`SEARCH_MODE=ab` 时同任务双引擎全跑,供 M0 A/B
+- **轮次引擎策略**(可配置):默认链下每轮 deepseek 广搜(count=10);`SEARCH_MODE=bocha|zhipu` 为 A/B 对照模式,`ab` 三家全链。R3+ 深挖轮切 zhipu_sogou 打知乎源留 M1
 - Fetcher 规则:遵守 robots.txt(REP 连续 UA 行合并分组)、单域串行(M1 强化)、只存摘要与被引单句
 
 ## 8. 流水线细节
@@ -238,7 +238,7 @@ run(task):
 |---|---|
 | BOCHA_API_KEY / ZHIPU_API_KEY / DEEPSEEK_API_KEY | 三把 key(PREP 1.1/1.1b/1.2) |
 | TIANDITU_KEY_SERVER / TIANDITU_KEY_BROWSER | 逆编码 / 瓦片,分 key 管理 |
-| SEARCH_MODE = bocha\|zhipu\|ab | M0 A/B 开关 |
+| SEARCH_MODE = deepseek(默认)\|bocha\|zhipu\|ab | 搜索主力选择,M0 A/B 用不同模式各跑一遍 |
 | SCARCITY_THRESHOLD=3 / REPORT_MAX_SOURCES=12 / FETCH_CONCURRENCY=4 | 流水线阈值 |
 | DEEPSEEK_MODEL=deepseek-chat / LLM_BACKUP_MODEL=glm-4-flash | 主/备 LLM 模型名 |
 

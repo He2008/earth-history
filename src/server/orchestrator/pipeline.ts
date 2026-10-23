@@ -7,11 +7,11 @@ import { getRepo, type Repo } from '@/server/db/repo';
 import type { LlmProvider, ChatMsg } from '@/server/providers/llm/types';
 import { createLlmChain } from '@/server/providers/llm/chain';
 import { createDeepSeek } from '@/server/providers/llm/deepseek';
-import { createQwen } from '@/server/providers/llm/qwen';
 import type { SearchChain } from '@/server/providers/search/chain';
 import { createSearchChain } from '@/server/providers/search/chain';
 import { createBocha } from '@/server/providers/search/bocha';
 import { createZhipu } from '@/server/providers/search/zhipu';
+import { createDeepSeekSearch } from '@/server/providers/search/deepseek';
 import type { Fetcher } from '@/server/providers/fetch/fetcher';
 import { createFetcher, RobotsGuard } from '@/server/providers/fetch/fetcher';
 import { planningMessages, synthesisMessages, scarceMessages, parsePlan } from '@/private/prompts';
@@ -32,13 +32,18 @@ export interface PipelineDeps {
 
 export function defaultDeps(): PipelineDeps {
   const cfg = config;
+  // 搜索链:默认 deepseek 主力、博查兜底;bocha/zhipu 模式供 M0 A/B;ab = 三家全链
+  const bocha = createBocha(() => cfg.BOCHA_API_KEY);
+  const zhipuStd = createZhipu('zhipu_std', () => cfg.ZHIPU_API_KEY);
+  const deepseek = createDeepSeekSearch(() => cfg.DEEPSEEK_API_KEY);
   const searchChain =
-    cfg.SEARCH_MODE === 'zhipu'
-      ? [createZhipu('zhipu_std', () => cfg.ZHIPU_API_KEY), createBocha(() => cfg.BOCHA_API_KEY)]
-      : [createBocha(() => cfg.BOCHA_API_KEY), createZhipu('zhipu_std', () => cfg.ZHIPU_API_KEY)];
+    cfg.SEARCH_MODE === 'bocha' ? [bocha, zhipuStd]
+    : cfg.SEARCH_MODE === 'zhipu' ? [zhipuStd, bocha]
+    : cfg.SEARCH_MODE === 'ab' ? [deepseek, bocha, zhipuStd]
+    : [deepseek, bocha]; // 'deepseek'(默认)
   return {
     cfg,
-    llm: createLlmChain([createDeepSeek(), createQwen()]),
+    llm: createLlmChain([createDeepSeek()]), // 单 DeepSeek;智谱 GLM 备用适配器保留(qwen.ts),需要时重新接线
     search: createSearchChain(searchChain),
     fetcher: createFetcher(new RobotsGuard()),
     repo: getRepo(),

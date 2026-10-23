@@ -3,7 +3,7 @@
 > 配套 `PRD.md` 使用 · 状态:待执行
 > 原则:**最小前置**——只办阻碍开工的事,文档随里程碑滚动补齐,不做纸面工程
 >
-> **2026-10-23 更新**:M0 编排器代码已实现并通过终审(分支 `m0-orchestrator`,15 文件 75 测试全绿,`next build` 通过;实施计划见 `docs/superpowers/plans/`)。**下一步 = 办齐 1.1/1.1b/1.2 三把 key → `npm run dev` + `npm run m0` 跑 D3 十地点盲评**。
+> **2026-10-23 更新**:M0 编排器代码已实现并通过终审(分支 `m0-orchestrator`,15 文件 75 测试全绿,`next build` 通过;实施计划见 `docs/superpowers/plans/`)。**搜索/LLM 已切全 DeepSeek(2026 新 Search API,¥0.005/次)——一把 key 即可开工,key 已配置在 `.env`**。下一步:`npm run dev` + `npm run m0` 跑 D3 十地点盲评;博查/智谱为可选 A/B 对照。
 
 ---
 

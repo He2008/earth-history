@@ -1,4 +1,4 @@
-export type SearchEngine = 'bocha' | 'zhipu_std' | 'zhipu_pro' | 'zhipu_sogou';
+export type SearchEngine = 'deepseek' | 'bocha' | 'zhipu_std' | 'zhipu_pro' | 'zhipu_sogou';
 export interface SearchHit {
   title: string; url: string; urlNorm: string;
   snippet: string; publishedAt?: string; engine: SearchEngine;

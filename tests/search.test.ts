@@ -1,6 +1,7 @@
 import { describe, it, expect, vi } from 'vitest';
 import { createBocha } from '@/server/providers/search/bocha';
 import { createZhipu } from '@/server/providers/search/zhipu';
+import { createDeepSeekSearch } from '@/server/providers/search/deepseek';
 import { createSearchChain, SearchAllFailedError } from '@/server/providers/search/chain';
 import type { SearchProvider } from '@/server/providers/search/types';
 
@@ -36,6 +37,32 @@ describe('zhipu', () => {
     const hits = await createZhipu('zhipu_sogou', () => 'k').search('q', { fetchImpl: fetchMock as unknown as typeof fetch } as never);
     expect(hits[0].url).toBe('https://z.com/1');
     expect(hits[0].engine).toBe('zhipu_sogou');
+  });
+});
+
+describe('deepseek search', () => {
+  it('映射 results → SearchHit,summary 截 200,date → publishedAt', async () => {
+    const fetchMock = vi.fn(async () => jsonResp({ results: [
+      { title: '云龙县志', url: 'https://dfz.yn.gov.cn/a?utm_source=x', summary: '长'.repeat(600), snippet: '短摘要', date: '2024-01-01T00:00:00Z', rerank_score: 2.1, authority: 3 },
+    ] }));
+    const hits = await createDeepSeekSearch(() => 'k').search('云龙县 历史', { fetchImpl: fetchMock as unknown as typeof fetch } as never);
+    expect(hits[0].title).toBe('云龙县志');
+    expect(hits[0].urlNorm).toBe('https://dfz.yn.gov.cn/a');
+    expect(hits[0].snippet.length).toBe(200);
+    expect(hits[0].publishedAt).toBe('2024-01-01T00:00:00Z');
+    expect(hits[0].engine).toBe('deepseek');
+  });
+  it('缺 url 字段的命中被过滤,不影响整批', async () => {
+    const fetchMock = vi.fn(async () => jsonResp({ results: [
+      { title: 'no-url', summary: 's' },
+      { title: 'ok', url: 'https://ok.com/1', summary: 's' },
+    ] }));
+    const hits = await createDeepSeekSearch(() => 'k').search('q', { fetchImpl: fetchMock as unknown as typeof fetch } as never);
+    expect(hits).toHaveLength(1);
+    expect(hits[0].engine).toBe('deepseek');
+  });
+  it('缺 key 抛错', async () => {
+    await expect(createDeepSeekSearch(() => '').search('q', {})).rejects.toThrow('缺少 API key');
   });
 });
 
