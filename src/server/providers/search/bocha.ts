@@ -20,6 +20,7 @@ export function createBocha(getKey: () => string): SearchProvider {
       const j = await resp.json();
       const values: any[] = j?.data?.webPages?.value ?? [];
       return values
+        .filter((v) => String(v?.url ?? '').startsWith('http'))
         .map((v) => ({
           title: String(v?.name ?? v?.title ?? ''),
           url: String(v?.url ?? ''),
@@ -27,8 +28,7 @@ export function createBocha(getKey: () => string): SearchProvider {
           snippet: String(v?.summary ?? v?.snippet ?? '').slice(0, 200),
           publishedAt: v?.dateLastCrawled ?? v?.publishDate ?? undefined,
           engine: 'bocha' as const,
-        }))
-        .filter((h) => h.url.startsWith('http'));
+        }));
     },
   };
 }

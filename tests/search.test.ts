@@ -17,6 +17,17 @@ describe('bocha', () => {
     expect(hits[0].snippet.length).toBe(200);
     expect(hits[0].engine).toBe('bocha');
   });
+
+  it('缺 url 字段的命中不会毁掉整批结果', async () => {
+    const fetchMock = vi.fn(async () => jsonResp({ data: { webPages: { value: [
+      { name: 'no-url', summary: 's' },
+      { name: 'ok', url: 'https://ok.com/1', summary: 's' },
+    ] } } }));
+    const hits = await createBocha(() => 'k').search('q', { fetchImpl: fetchMock as unknown as typeof fetch } as never);
+    expect(hits).toHaveLength(1);
+    expect(hits[0].url).toBe('https://ok.com/1');
+    expect(hits[0].engine).toBe('bocha');
+  });
 });
 
 describe('zhipu', () => {

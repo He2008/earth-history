@@ -28,6 +28,7 @@ export function createZhipu(engine: 'zhipu_std' | 'zhipu_pro' | 'zhipu_sogou', g
       const j = await resp.json();
       const list: any[] = j?.search_result ?? j?.data?.search_result ?? [];
       return list
+        .filter((v) => String(v?.link ?? v?.url ?? '').startsWith('http'))
         .map((v) => ({
           title: String(v?.title ?? ''),
           url: String(v?.link ?? v?.url ?? ''),
@@ -35,8 +36,7 @@ export function createZhipu(engine: 'zhipu_std' | 'zhipu_pro' | 'zhipu_sogou', g
           snippet: String(v?.content ?? '').slice(0, 200),
           publishedAt: v?.publish_date ?? v?.date_published ?? undefined,
           engine: engine as SearchEngine,
-        }))
-        .filter((h) => h.url.startsWith('http'));
+        }));
     },
   };
 }
