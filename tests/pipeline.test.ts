@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { openDb, migrate } from '@/server/db/client';
 import { createRepo, type Repo } from '@/server/db/repo';
-import { runTask, type PipelineDeps } from '@/server/orchestrator/pipeline';
+import { runTask, scoreHit, type PipelineDeps } from '@/server/orchestrator/pipeline';
 import { bus } from '@/server/orchestrator/events';
 import { __captureLogsForTests } from '@/server/obs/log';
 import { loadConfig } from '@/lib/config';
@@ -127,5 +127,13 @@ describe('runTask', () => {
     const tl = JSON.parse(repo.getTask('t6')!.timeline_json) as Array<{ note: string }>;
     const roundNotes = tl.filter((e) => e.note.includes('轮'));
     expect(roundNotes.length).toBeLessThanOrEqual(2);
+  });
+});
+
+describe('scoreHit 垃圾标题降权', () => {
+  it('标题带 HTML 残片重度降权(排到正常源之后)', () => {
+    const junk = { title: '<table><tr><td>登记</td></tr></table>', url: 'https://gansu.chinatax.gov.cn/a', urlNorm: 'https://gansu.chinatax.gov.cn/a', snippet: '敦煌市', publishedAt: undefined, engine: 'deepseek' as const };
+    const good = { title: '敦煌历史文化', url: 'https://www.dunhuang.gov.cn/a', urlNorm: 'https://www.dunhuang.gov.cn/a', snippet: '敦煌市', publishedAt: undefined, engine: 'deepseek' as const };
+    expect(scoreHit(junk, '敦煌市')).toBeLessThan(scoreHit(good, '敦煌市'));
   });
 });

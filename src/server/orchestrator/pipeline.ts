@@ -16,7 +16,7 @@ import type { Fetcher } from '@/server/providers/fetch/fetcher';
 import { createFetcher, RobotsGuard } from '@/server/providers/fetch/fetcher';
 import { planningMessages, synthesisMessages, scarceMessages, parsePlan } from '@/private/prompts';
 import { log } from '@/server/obs/log';
-import { buildSourcePack, validateCitations } from './citations';
+import { buildSourcePack, validateCitations, cleanTitle } from './citations';
 import { bus } from './events';
 import { registry, BUDGETS_MS } from './machine';
 import type { SearchHit } from '@/server/providers/search/types';
@@ -67,6 +67,7 @@ export function scoreHit(hit: SearchHit, placeName: string): number {
   if (hit.title.includes(placeName)) s += 2;
   if (hit.snippet.includes(placeName)) s += 1;
   if (hit.title.length > 60) s -= 0.5;
+  if (/[<{]/.test(hit.title)) s -= 3; // 标题带 HTML 残片,多为表格/登记类垃圾页,重度降权
   return s;
 }
 
@@ -161,7 +162,7 @@ export async function runTask(taskId: string, deps: PipelineDeps, signal?: Abort
       .map((v) => ({ hit: v.hit, score: scoreHit(v.hit, task.place_name) }))
       .sort((a, b) => b.score - a.score)
       .slice(0, cfg.REPORT_MAX_SOURCES)
-      .map((x, i) => ({ ...x.hit, idx: i + 1, score: x.score }));
+      .map((x, i) => ({ ...x.hit, title: cleanTitle(x.hit.title), idx: i + 1, score: x.score }));
     repo.dropCandidates(taskId);
     const rowIdByUrlNorm = new Map<string, number>();
     for (const k of keptList) {
@@ -201,7 +202,7 @@ export async function runTask(taskId: string, deps: PipelineDeps, signal?: Abort
       emit('progress', { phase: 'scarce', note: `资料稀缺(${keptList.length} 源),降级输出`, ts: Date.now() });
       const adminCtx = [place.province, place.city, place.county, place.village].filter(Boolean).join('');
       const raw = await synthesize(scarceMessages(promptPlace, adminCtx, keptList.map((s) => s.snippet).join('\n')), BUDGETS_MS.scarce);
-      finalMd = `> ⚠️ 公开资料稀缺,以下为该地行政区划与地理背景,不含未经证实的细节。\n\n${raw.trim()}\n\n## 来源\n${keptList.map((s) => `${s.idx}. [${s.title}](${s.url})`).join('\n')}\n`;
+      finalMd = `> ⚠️ 公开资料稀缺,以下为该地行政区划与地理背景,不含未经证实的细节。\n\n${raw.trim()}\n\n## 来源\n${keptList.map((s) => `${s.idx}. [${s.title}](${s.urlNorm})`).join('\n')}\n`;
     } else {
       // ---- fetching ----
       const tf = Date.now();
@@ -242,7 +243,7 @@ export async function runTask(taskId: string, deps: PipelineDeps, signal?: Abort
         if (totalMarks > 0 && invalidCount / totalMarks > 0.2) repo.appendTimeline(taskId, { phase: 'synthesizing', note: `quality_flag: 无效引用占比 ${Math.round((invalidCount / totalMarks) * 100)}%`, ts: Date.now() });
       }
       finalStatus = 'completed';
-      finalMd = `${report.trim()}\n\n## 来源\n${keptList.map((s) => `${s.idx}. [${s.title}](${s.url})`).join('\n')}\n`;
+      finalMd = `${report.trim()}\n\n## 来源\n${keptList.map((s) => `${s.idx}. [${s.title}](${s.urlNorm})`).join('\n')}\n`;
     }
 
     repo.updateTask(taskId, { report_md: finalMd });
@@ -250,7 +251,7 @@ export async function runTask(taskId: string, deps: PipelineDeps, signal?: Abort
       const rowId = rowIdByUrlNorm.get(s.urlNorm);
       if (rowId && finalMd.includes(`[${s.idx}]`)) repo.updateSource(rowId, { stage: 'cited' });
     }
-    emit('sources', { items: keptList.map((s) => ({ idx: s.idx, title: s.title, url: s.url, site: new URL(s.url).hostname, date: s.publishedAt ?? null })) });
+    emit('sources', { items: keptList.map((s) => ({ idx: s.idx, title: s.title, url: s.urlNorm, site: new URL(s.url).hostname, date: s.publishedAt ?? null })) });
     finish(finalStatus, { share_token: nanoid(12) });
     repo.cachePut(cacheKey(place.county, task.lat, task.lng, task.direction), taskId);
     emit('done', { taskId, status: finalStatus, elapsedMs: Date.now() - t0, sourcesKept: keptList.length, scarcity, yuan: cost().yuan, reportChars: finalMd.length });

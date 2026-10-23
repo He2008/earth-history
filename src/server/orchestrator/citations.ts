@@ -1,5 +1,14 @@
 interface SourceLike { idx: number; title: string; url: string; snippet: string; published_at?: string | null }
 
+// 来源标题清洗:搜索结果的 title 常是 HTML 残片/摘要碎片/重复的"站点名 - 站名牌"
+export function cleanTitle(raw: string): string {
+  let t = raw.replace(/<[^>]+>/g, ' ');
+  t = t.replace(/\s+/g, ' ').trim();
+  const dup = t.match(/^(.{2,60}?) - \1$/);
+  if (dup) t = dup[1];
+  return t.slice(0, 60);
+}
+
 export function buildSourcePack(kept: SourceLike[]): string {
   return kept
     .map((s) => {
