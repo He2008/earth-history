@@ -40,6 +40,11 @@ describe('repo tasks', () => {
     repo.saveReportDelta('t1', '第二段');
     expect(repo.getTask('t1')!.report_md).toBe('第一段第二段');
   });
+  it('patch 键白名单:updateTask 非法列名抛错,表未被破坏', () => {
+    repo.createTask(task);
+    expect(() => repo.updateTask('t1', { 'status; DROP TABLE research_tasks': 'x' } as never)).toThrow(/illegal patch key/);
+    expect(repo.getTask('t1')!.status).toBe('queued');
+  });
   it('sweepStaleTasks 清理非终态旧行为 failed/stale_task', () => {
     repo.createTask(task);
     repo.updateTask('t1', { updated_at: Date.now() - 10 * 60_000 });
@@ -61,6 +66,12 @@ describe('repo sources', () => {
     repo.dropCandidates('t1');
     expect(repo.listSources('t1', 'candidate').length).toBe(0);
     expect(repo.listSources('t1', 'kept').length).toBe(2);
+  });
+  it('patch 键白名单:updateSource 非法列名抛错', () => {
+    repo.createTask(task);
+    const id1 = repo.insertSource({ task_id: 't1', idx: null, stage: 'candidate', title: 'a', url: 'https://a/1', url_norm: 'https://a/1', snippet: 's', published_at: null, engine: 'bocha', score: null, fetched_chars: null, quote: null });
+    expect(() => repo.updateSource(id1, { evil: '(SELECT 1)' } as never)).toThrow(/illegal patch key/);
+    expect(repo.listSources('t1')[0].stage).toBe('candidate');
   });
 });
 

@@ -21,6 +21,22 @@ export interface SourceRow {
 export interface TimelineEntry { phase: string; round?: number; note: string; ts: number }
 export type NewSource = Omit<SourceRow, 'id'>;
 
+// patch 键白名单:updateTask/updateSource 的列名插值只允许已知列,杜绝对外拼接的注入面
+const ALLOWED_TASK_PATCH_KEYS = new Set([
+  'status', 'place_name', 'place_json', 'lat', 'lng', 'direction', 'extra_instruction',
+  'plan_json', 'timeline_json', 'report_md', 'share_token', 'error_code', 'error_msg',
+  'cost_json', 'timings_json', 'feedback', 'created_at', 'updated_at', 'finished_at',
+]);
+const ALLOWED_SOURCE_PATCH_KEYS = new Set([
+  'task_id', 'idx', 'stage', 'title', 'url', 'url_norm', 'snippet', 'published_at',
+  'engine', 'score', 'fetched_chars', 'quote',
+]);
+const assertPatchKeys = (patch: Record<string, unknown>, allowed: Set<string>): string[] => {
+  const keys = Object.keys(patch);
+  for (const k of keys) if (!allowed.has(k)) throw new Error(`illegal patch key: ${k}`);
+  return keys;
+};
+
 export function createRepo(db: Database.Database) {
   const now = () => Date.now();
 
@@ -33,7 +49,7 @@ export function createRepo(db: Database.Database) {
     db.prepare('SELECT * FROM research_tasks WHERE id=?').get(id) as TaskRow | undefined;
 
   const updateTask = (id: string, patch: Record<string, unknown>) => {
-    const keys = Object.keys(patch);
+    const keys = assertPatchKeys(patch, ALLOWED_TASK_PATCH_KEYS);
     if (!keys.length) return;
     const sets = keys.map((k) => `${k}=?`).join(',');
     if ('updated_at' in patch) {
@@ -62,7 +78,7 @@ export function createRepo(db: Database.Database) {
       .run(s.task_id, s.idx, s.stage, s.title, s.url, s.url_norm, s.snippet, s.published_at, s.engine, s.score, s.fetched_chars, s.quote).lastInsertRowid);
 
   const updateSource = (rowId: number, patch: Record<string, unknown>) => {
-    const keys = Object.keys(patch);
+    const keys = assertPatchKeys(patch, ALLOWED_SOURCE_PATCH_KEYS);
     if (!keys.length) return;
     const sets = keys.map((k) => `${k}=?`).join(',');
     db.prepare(`UPDATE sources SET ${sets} WHERE id=?`).run(...keys.map((k) => patch[k]), rowId);
