@@ -16,7 +16,7 @@ import type { Fetcher } from '@/server/providers/fetch/fetcher';
 import { createFetcher, RobotsGuard } from '@/server/providers/fetch/fetcher';
 import { planningMessages, synthesisMessages, scarceMessages, parsePlan } from '@/private/prompts';
 import { log } from '@/server/obs/log';
-import { buildSourcePack, validateCitations, cleanTitle } from './citations';
+import { buildSourcePack, validateCitations, cleanTitle, extractCitedSentence, hasCitation } from './citations';
 import { bus } from './events';
 import { registry, BUDGETS_MS } from './machine';
 import type { SearchHit } from '@/server/providers/search/types';
@@ -193,6 +193,7 @@ export async function runTask(taskId: string, deps: PipelineDeps, signal?: Abort
     let finalStatus: 'completed' | 'scarce';
     let finalMd: string;
     let scarcity = false;
+    let citedBody: string | null = null; // 引用校验后的正文(不含来源附录),被引单句从这里提取
 
     if (keptList.length < cfg.SCARCITY_THRESHOLD) {
       // ---- scarce 降级 ----
@@ -235,6 +236,7 @@ export async function runTask(taskId: string, deps: PipelineDeps, signal?: Abort
       // ---- synthesizing ----
       const raw = await synthesize(synthesisMessages(promptPlace, task.direction as Direction, plan, buildSourcePack(keptList), pages.join('\n\n')), BUDGETS_MS.synthesize);
       const { report, invalidCount } = validateCitations(raw, keptList.length);
+      citedBody = report;
       if (invalidCount > 0) {
         const totalMarks = (raw.match(/\[\d{1,3}\]/g) ?? []).length;
         repo.appendTimeline(taskId, { phase: 'synthesizing', note: `剔除 ${invalidCount} 个无效引用标记`, ts: Date.now() });
@@ -249,7 +251,8 @@ export async function runTask(taskId: string, deps: PipelineDeps, signal?: Abort
     repo.updateTask(taskId, { report_md: finalMd });
     for (const s of keptList) {
       const rowId = rowIdByUrlNorm.get(s.urlNorm);
-      if (rowId && finalMd.includes(`[${s.idx}]`)) repo.updateSource(rowId, { stage: 'cited' });
+      // 被引单句回写 quote 列(≤200 字,来源核查用);scarce 降级无正文引用,quote 留空
+      if (rowId && hasCitation(finalMd, s.idx)) repo.updateSource(rowId, { stage: 'cited', quote: citedBody === null ? null : extractCitedSentence(citedBody, s.idx) });
     }
     emit('sources', { items: keptList.map((s) => ({ idx: s.idx, title: s.title, url: s.urlNorm, site: new URL(s.url).hostname, date: s.publishedAt ?? null })) });
     finish(finalStatus, { share_token: nanoid(12) });

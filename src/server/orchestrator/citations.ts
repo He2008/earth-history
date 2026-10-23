@@ -27,3 +27,30 @@ export function validateCitations(report: string, maxIdx: number): { report: str
   });
   return { report: report2, invalidCount };
 }
+
+// 编号精确匹配:[1] 不得被 [12] 的子串干扰(与 validateCitations 同一口径)
+export function hasCitation(text: string, idx: number): boolean {
+  return new RegExp(`(?<!\\d)\\[${idx}\\](?!\\d)`).test(text);
+}
+
+const SENTENCE_DELIMS = ['\n', '。', '!', '?', ';', '!', '?', ';'];
+const QUOTE_MAX_CHARS = 200; // 落库合规口径:snippet 与被引单句均 ≤200 字(PREP §4)
+
+// 被引单句(TDD §4 sources.quote):取正文中首个引用该编号的完整句子,供来源核查
+export function extractCitedSentence(report: string, idx: number): string | null {
+  const re = /(?<!\d)\[(\d{1,3})\](?!\d)/g;
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(report)) !== null) {
+    if (Number(m[1]) !== idx) continue;
+    let start = -1;
+    for (const d of SENTENCE_DELIMS) start = Math.max(start, report.lastIndexOf(d, m.index));
+    let end = report.length;
+    for (const d of SENTENCE_DELIMS) {
+      const i = report.indexOf(d, m.index + m[0].length);
+      if (i !== -1) end = Math.min(end, i);
+    }
+    const sentence = report.slice(start + 1, end < report.length ? end + 1 : end).trim();
+    return sentence.slice(0, QUOTE_MAX_CHARS) || null;
+  }
+  return null;
+}

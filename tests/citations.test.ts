@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { buildSourcePack, validateCitations, cleanTitle } from '@/server/orchestrator/citations';
+import { buildSourcePack, validateCitations, cleanTitle, extractCitedSentence, hasCitation } from '@/server/orchestrator/citations';
 
 describe('buildSourcePack', () => {
   it('编号·标题·域名·日期+摘要', () => {
@@ -23,6 +23,33 @@ describe('validateCitations', () => {
     const r = validateCitations('纯文本[3]', 5);
     expect(r.report).toBe('纯文本[3]');
     expect(r.invalidCount).toBe(0);
+  });
+});
+
+describe('extractCitedSentence(被引单句回写,TDD §4 quote 列)', () => {
+  const md = '第一句引一[1]。第二句引十二[12]!再引一次一[1]呢?换行后\n第三句引二[2];';
+  it('取首个被引句,含终结符,按句子边界切分', () => {
+    expect(extractCitedSentence(md, 1)).toBe('第一句引一[1]。');
+    expect(extractCitedSentence(md, 12)).toBe('第二句引十二[12]!');
+    expect(extractCitedSentence(md, 2)).toBe('第三句引二[2];');
+  });
+  it('[1] 不误配 [12] 的子串(编号精确匹配)', () => {
+    expect(extractCitedSentence('只引十二[12]', 1)).toBeNull();
+  });
+  it('未被引用的编号返回 null', () => {
+    expect(extractCitedSentence(md, 9)).toBeNull();
+  });
+  it('超长句截断 200 字(落库合规口径)', () => {
+    const long = '字'.repeat(300) + '[1]。';
+    expect(extractCitedSentence(long, 1)!.length).toBe(200);
+  });
+});
+
+describe('hasCitation(编号精确匹配)', () => {
+  it('[1] 不命中 [12],[12] 不被 [1] 抢占', () => {
+    expect(hasCitation('文[12]尾', 1)).toBe(false);
+    expect(hasCitation('文[12]尾', 12)).toBe(true);
+    expect(hasCitation('文[1]尾', 1)).toBe(true);
   });
 });
 

@@ -80,6 +80,17 @@ describe('runTask', () => {
     expect(t.report_md).toContain('[1]');
     expect(t.report_md).not.toContain('[9]');
   });
+  it('引用校验后被引单句回写 quote 列(来源核查用)', async () => {
+    repo.createTask({ ...TASK, id: 't8' });
+    await runTask('t8', deps({ llm: fakeLlm({ plan: '{"subQuestions":["q1","q2"]}', report: '诺邓因盐而兴[1]。其余背景[2]。\n' }) }));
+    const byStage = repo.listSources('t8');
+    const q1 = byStage.find((s) => s.idx === 1)!;
+    const q2 = byStage.find((s) => s.idx === 2)!;
+    expect(q1.stage).toBe('cited');
+    expect(q1.quote).toBe('诺邓因盐而兴[1]。');
+    expect(q2.quote).toBe('其余背景[2]。');
+    expect(byStage.find((s) => s.idx === 3)!.stage).not.toBe('cited'); // 未被正文引用不标 cited
+  });
   it('搜索全抛错 → failed / search_all_failed', async () => {
     repo.createTask({ ...TASK, id: 't4' });
     const d = deps({ search: { search: async () => { throw new Error('down'); } } });
