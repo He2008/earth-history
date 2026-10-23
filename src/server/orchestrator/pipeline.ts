@@ -71,6 +71,9 @@ export function scoreHit(hit: SearchHit, placeName: string): number {
   return s;
 }
 
+// 缺口补查换 query:同一问点重查时逐轮换措辞,避免同词重发拿回同一批结果(稀疏地点覆盖退化主因)
+const QUERY_VARIANTS = ['', ' 历史资料', ' 百科', ' 概况', ' 地方志'];
+
 // 组合任务信号与阶段预算上限:任一触发即中止(Node ≥20.3 AbortSignal.any)
 const withBudget = (signal: AbortSignal | undefined, ms: number): AbortSignal =>
   AbortSignal.any([signal ?? new AbortController().signal, AbortSignal.timeout(ms)]);
@@ -123,16 +126,18 @@ export async function runTask(taskId: string, deps: PipelineDeps, signal?: Abort
     // ---- searching(自适应多轮) ----
     const ts = Date.now();
     phase('searching', '开始自适应检索', 0);
-    const kept = new Map<string, { hit: SearchHit; subQ: number }>();
-    const coverage = new Array<number>(plan.length).fill(0);
+    const kept = new Map<string, SearchHit>();
+    // 覆盖计数 = 每个子问题命中的不重复 URL 集合;重复命中也计入当前子问题,修稀疏地点的覆盖退化
+    const covered = plan.map(() => new Set<string>());
     let anySearchOk = false;
     let round = 0;
     while (round < 6 && Date.now() - ts < BUDGETS_MS.searchTotal) {
-      const open = plan.map((_, i) => i).filter((i) => coverage[i] < 2);
-      if (round >= 2 && open.length === 0) break;
+      const open = plan.map((_, i) => i).filter((i) => covered[i].size < 2);
+      if (open.length === 0 && round >= 1) break; // 首轮必跑;全覆盖后不再白跑复核轮
       round++;
       const targets = (open.length ? open : plan.map((_, i) => i)).slice(0, 3);
-      const queries = targets.map((i) => `${task.place_name} ${plan[i]}`);
+      const variant = QUERY_VARIANTS[(round - 1) % QUERY_VARIANTS.length];
+      const queries = targets.map((i) => `${task.place_name} ${plan[i]}${variant}`);
       const results = await Promise.allSettled(queries.map((q) => deps.search.search(q, { count: 10, signal })));
       const fresh: SearchHit[] = [];
       results.forEach((r, qi) => {
@@ -140,12 +145,10 @@ export async function runTask(taskId: string, deps: PipelineDeps, signal?: Abort
         anySearchOk = true;
         searchCalls[r.value.engine] = (searchCalls[r.value.engine] ?? 0) + 1;
         for (const h of r.value.hits) {
-          const subQ = targets[qi];
-          const prev = kept.get(h.urlNorm);
-          if (prev) { coverage[prev.subQ]++; continue; }
-          kept.set(h.urlNorm, { hit: h, subQ });
+          covered[targets[qi]].add(h.urlNorm);
+          if (kept.has(h.urlNorm)) continue;
+          kept.set(h.urlNorm, h);
           fresh.push(h);
-          coverage[subQ]++;
         }
       });
       for (const h of fresh) {
@@ -153,13 +156,12 @@ export async function runTask(taskId: string, deps: PipelineDeps, signal?: Abort
       }
       emit('search_hit', { round, query: queries[0], engine: results[0]?.status === 'fulfilled' ? results[0].value.engine : null, found: fresh.length, kept: fresh.slice(0, 5).map((h) => ({ title: h.title, url: h.url, snippet: h.snippet })) });
       repo.appendTimeline(taskId, { phase: 'searching', note: `第 ${round} 轮检索,新增 ${fresh.length} 源`, round, ts: Date.now() });
-      if (!open.length) break;
     }
     timings.searchingMs = Date.now() - ts;
     if (kept.size === 0 && !anySearchOk) throw new SearchAllFailedError('所有轮次搜索均失败');
 
     const keptList = [...kept.values()]
-      .map((v) => ({ hit: v.hit, score: scoreHit(v.hit, task.place_name) }))
+      .map((hit) => ({ hit, score: scoreHit(hit, task.place_name) }))
       .sort((a, b) => b.score - a.score)
       .slice(0, cfg.REPORT_MAX_SOURCES)
       .map((x, i) => ({ ...x.hit, title: cleanTitle(x.hit.title), idx: i + 1, score: x.score }));

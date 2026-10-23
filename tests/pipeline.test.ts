@@ -139,6 +139,32 @@ describe('runTask', () => {
     const roundNotes = tl.filter((e) => e.note.includes('轮'));
     expect(roundNotes.length).toBeLessThanOrEqual(2);
   });
+  it('重复命中计入当前子问题:高度重叠结果单轮即闭环,不再白跑', async () => {
+    repo.createTask({ ...TASK, id: 't9' });
+    let calls = 0;
+    // 两个子问题,搜索永远返回同一组 3 条 URL(稀疏地点典型:各引擎口径高度重叠)
+    const search: SearchChain['search'] = async () => {
+      calls++;
+      return { hits: [1, 2, 3].map((k) => ({ title: `t${k}`, url: `https://o/${k}`, urlNorm: `https://o/${k}`, snippet: 's', publishedAt: undefined, engine: 'bocha' as const })), engine: 'bocha' };
+    };
+    await runTask('t9', deps({ search: { search } }));
+    // 旧逻辑:重复 URL 只记首见子问题 → 子问题2永远缺口 → 白跑到轮次上限;新逻辑:R1 双双覆盖即退出
+    expect(calls).toBe(2); // 2 子问题 × 1 轮
+  });
+  it('缺口补查换 query:第 2 轮起同问点追加变体词', async () => {
+    repo.createTask({ ...TASK, id: 't10' });
+    const seen: string[] = [];
+    const search: SearchChain['search'] = async (q) => {
+      seen.push(q);
+      // R1 每问 1 条(缺口),R2 起每问 2 条新源 → R2 后闭环
+      const r = seen.length <= 2 ? 1 : 2;
+      const hits = Array.from({ length: r }, (_, k) => ({ title: `${q}#${k}`, url: `https://v/${seen.length}/${k}`, urlNorm: `https://v/${seen.length}/${k}`, snippet: 's', publishedAt: undefined, engine: 'bocha' as const }));
+      return { hits, engine: 'bocha' };
+    };
+    await runTask('t10', deps({ search: { search } }));
+    expect(seen).toHaveLength(4); // 2 轮 × 2 问
+    expect(seen.slice(2).every((q) => /诺邓村 q[12] \S+$/.test(q))).toBe(true); // R2 换了措辞
+  });
 });
 
 describe('scoreHit 垃圾标题降权', () => {
