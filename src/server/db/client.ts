@@ -23,3 +23,5 @@ export function getDb(): Database.Database {
   }
   return _db;
 }
+
+export function __setDbForTests(db: Database.Database): void { _db = db; migrate(db); }

@@ -98,3 +98,5 @@ export function getRepo(): Repo {
   if (!_repo) _repo = createRepo(getDb());
   return _repo;
 }
+
+export function __resetRepoForTests(): void { _repo = undefined; }
