@@ -24,6 +24,7 @@ export function openAiCompatibleLlm(name: 'deepseek' | 'qwen', baseUrl: string, 
               stream_options: { include_usage: true },
               ...(req.temperature != null && { temperature: req.temperature }),
               ...(req.maxTokens != null && { max_tokens: req.maxTokens }),
+              ...(req.thinking && { thinking: { type: req.thinking } }),
             }),
           });
           if (!resp.ok || !resp.body) throw new Error(`${name}: HTTP ${resp.status}`);

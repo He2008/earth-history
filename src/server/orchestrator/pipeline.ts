@@ -108,7 +108,7 @@ export async function runTask(taskId: string, deps: PipelineDeps, signal?: Abort
     phase('planning', '正在拆解研究子问题');
     let plan: string[];
     {
-      const call = deps.llm.chatStream({ messages: planningMessages(promptPlace, task.direction as Direction, task.extra_instruction ?? undefined), temperature: 0.3, signal: withBudget(signal, BUDGETS_MS.planning) });
+      const call = deps.llm.chatStream({ messages: planningMessages(promptPlace, task.direction as Direction, task.extra_instruction ?? undefined), temperature: 0.3, thinking: 'disabled', signal: withBudget(signal, BUDGETS_MS.planning) });
       let out = '';
       for await (const c of call.stream) out += c.delta ?? '';
       const u = await call.usage;
@@ -171,7 +171,8 @@ export async function runTask(taskId: string, deps: PipelineDeps, signal?: Abort
     const synthesize = async (msgs: ChatMsg[], budgetMs: number): Promise<string> => {
       phase('synthesizing', '综合成文');
       const tSyn = Date.now();
-      const call = deps.llm.chatStream({ messages: msgs, temperature: 0.5, maxTokens: 4096, signal: withBudget(signal, budgetMs) });
+      // 思考型模型必须关思考,否则推理吃光配额导致正文为空;上限 8192 留足正文空间
+      const call = deps.llm.chatStream({ messages: msgs, temperature: 0.5, maxTokens: 8192, thinking: 'disabled', signal: withBudget(signal, budgetMs) });
       let full = '', held = '';
       for await (const c of call.stream) {
         const d = c.delta ?? '';

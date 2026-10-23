@@ -2,6 +2,8 @@ export interface ChatMsg { role: 'system' | 'user' | 'assistant'; content: strin
 export interface LlmRequest {
   model?: string; messages: ChatMsg[]; // model 可选:提供方自默认(DeepSeek/智谱各取其配置)
   temperature?: number; maxTokens?: number; signal?: AbortSignal;
+  /** deepseek-flash 等思考型模型:不关思考,推理会吃光 max_tokens 导致正文为空 */
+  thinking?: 'enabled' | 'disabled';
 }
 export interface LlmChunk { delta?: string }
 export interface LlmUsage { promptTokens: number; completionTokens: number }

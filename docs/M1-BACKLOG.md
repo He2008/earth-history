@@ -31,5 +31,5 @@
 ## 追加(2026-10-23 跑分实战)
 
 - ~~OOM 崩溃链~~ 已修:fetcher 响应体 2MB 字节上限(曾致 node V8 堆耗尽崩溃,连杀整批任务);robots.txt 5s 超时+接入任务信号(曾致抓取阶段挂死 14 分钟,且硬上限 abort 打不断)。
-- dev 模式 SSE 中继会随机丢高频 content 事件(生产模式正常):跑分脚本已改为 done 后从 `GET /api/research/:id` 取 DB 终稿回写;M1 若要在 dev 下调试流式 UI 再查 Next dev 流转发层。
+- ~~dev 模式丢 content 事件~~ 诊断更正:实为思考型模型吃光 max_tokens 配额致正文为空(已修:thinking 禁用 + 上限 8192);跑分脚本以 DB 终稿回写的做法保留(更稳)。
 - `next start` 与 `output: standalone` 有不兼容警告但实测可用;正式部署用 `node .next/standalone/server.js`。

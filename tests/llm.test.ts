@@ -107,4 +107,33 @@ describe('openai-compat usage 结算', () => {
       expect(await call.usage).toEqual({ promptTokens: 3, completionTokens: 5 });
     } finally { globalThis.fetch = orig; }
   });
+  it('thinking/max_tokens 按需进请求体,未传则不出现', async () => {
+    const orig = globalThis.fetch;
+    const bodies: string[] = [];
+    globalThis.fetch = (async (_u: unknown, init: RequestInit) => {
+      bodies.push(String(init.body));
+      const enc = new TextEncoder();
+      const body = new ReadableStream<Uint8Array>({
+        start(c) {
+          c.enqueue(enc.encode('data: {"choices":[{"delta":{"content":"ok"}}]}\n\n'));
+          c.enqueue(enc.encode('data: [DONE]\n\n'));
+          c.close();
+        },
+      });
+      return new Response(body, { status: 200 });
+    }) as typeof fetch;
+    try {
+      const p = openAiCompatibleLlm('deepseek', 'https://x.example', () => 'k', () => 'deepseek-flash');
+      const a = p.chatStream({ messages: [], maxTokens: 8192, thinking: 'disabled' });
+      for await (const _ of a.stream) { /* drain */ }
+      const b = p.chatStream({ messages: [] });
+      for await (const _ of b.stream) { /* drain */ }
+      const j1 = JSON.parse(bodies[0]);
+      const j2 = JSON.parse(bodies[1]);
+      expect(j1.thinking).toEqual({ type: 'disabled' });
+      expect(j1.max_tokens).toBe(8192);
+      expect(j2.thinking).toBeUndefined();
+      expect(j2.max_tokens).toBeUndefined();
+    } finally { globalThis.fetch = orig; }
+  });
 });
