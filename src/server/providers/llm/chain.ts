@@ -24,7 +24,7 @@ export function createLlmChain(providers: LlmProvider[]): LlmProvider {
               for await (const c of call.stream) { produced = true; yield c; }
               ok = true;
             } catch (e) {
-              if (produced) { tried.push(`${p.name}:partial`); throw e; }
+              if (produced) { tried.push(`${p.name}:partial`); usageRej(e); throw e; } // 已产出部分后中断:链级 usage 立即结算
               tried.push(`${p.name}#${attempt}`);
             }
             if (ok) {

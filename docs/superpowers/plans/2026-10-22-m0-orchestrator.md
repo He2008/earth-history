@@ -604,8 +604,13 @@ export function createRepo(db: Database.Database) {
     const keys = Object.keys(patch);
     if (!keys.length) return;
     const sets = keys.map((k) => `${k}=?`).join(',');
-    db.prepare(`UPDATE research_tasks SET ${sets}, updated_at=? WHERE id=?`)
-      .run(...keys.map((k) => patch[k]), now(), id);
+    if ('updated_at' in patch) {
+      db.prepare(`UPDATE research_tasks SET ${sets} WHERE id=?`)
+        .run(...keys.map((k) => patch[k]), id);
+    } else {
+      db.prepare(`UPDATE research_tasks SET ${sets}, updated_at=? WHERE id=?`)
+        .run(...keys.map((k) => patch[k]), now(), id);
+    }
   };
 
   const appendTimeline = (id: string, entry: TimelineEntry) => {
@@ -871,6 +876,8 @@ export function createQwen(getKey: () => string = () => config.ZHIPU_API_KEY) {
 ```ts
 import { LlmAllFailedError, type LlmCall, type LlmProvider, type LlmRequest, type LlmUsage } from './types';
 
+export { LlmAllFailedError };
+
 export function createLlmChain(providers: LlmProvider[]): LlmProvider {
   const fails = new Map<string, number>();
   const blockedUntil = new Map<string, number>();
@@ -880,6 +887,7 @@ export function createLlmChain(providers: LlmProvider[]): LlmProvider {
       let usageRes!: (u: LlmUsage) => void;
       let usageRej!: (e: unknown) => void;
       const usage = new Promise<LlmUsage>((res, rej) => { usageRes = res; usageRej = rej; });
+      usage.catch(() => {}); // 调用方仅消费 stream 未 await usage 时,避免 unhandled rejection
       const stream = (async function* () {
         const tried: string[] = [];
         for (const p of providers) {
@@ -1089,7 +1097,7 @@ export function createBocha(getKey: () => string): SearchProvider {
       });
       if (!resp.ok) throw new Error(`bocha: HTTP ${resp.status}`);
       const j = await resp.json();
-      const values: any[] = j?.data?.webPages?.value ?? [];
+      const values: any[] = (j?.data?.webPages?.value ?? []).filter((v) => String(v?.url ?? '').startsWith('http'));
       return values
         .map((v) => ({
           title: String(v?.name ?? v?.title ?? ''),
@@ -1098,8 +1106,7 @@ export function createBocha(getKey: () => string): SearchProvider {
           snippet: String(v?.summary ?? v?.snippet ?? '').slice(0, 200),
           publishedAt: v?.dateLastCrawled ?? v?.publishDate ?? undefined,
           engine: 'bocha' as const,
-        }))
-        .filter((h) => h.url.startsWith('http'));
+        }));
     },
   };
 }
@@ -1135,7 +1142,7 @@ export function createZhipu(engine: 'zhipu_std' | 'zhipu_pro' | 'zhipu_sogou', g
       });
       if (!resp.ok) throw new Error(`${engine}: HTTP ${resp.status}`);
       const j = await resp.json();
-      const list: any[] = j?.search_result ?? j?.data?.search_result ?? [];
+      const list: any[] = (j?.search_result ?? j?.data?.search_result ?? []).filter((v) => String(v?.link ?? v?.url ?? '').startsWith('http'));
       return list
         .map((v) => ({
           title: String(v?.title ?? ''),
@@ -1144,8 +1151,7 @@ export function createZhipu(engine: 'zhipu_std' | 'zhipu_pro' | 'zhipu_sogou', g
           snippet: String(v?.content ?? '').slice(0, 200),
           publishedAt: v?.publish_date ?? v?.date_published ?? undefined,
           engine: engine as SearchEngine,
-        }))
-        .filter((h) => h.url.startsWith('http'));
+        }));
     },
   };
 }
@@ -1154,6 +1160,8 @@ export function createZhipu(engine: 'zhipu_std' | 'zhipu_pro' | 'zhipu_sogou', g
 `src/server/providers/search/chain.ts`:
 ```ts
 import { SearchAllFailedError, type SearchEngine, type SearchHit, type SearchOpts, type SearchProvider } from './types';
+
+export { SearchAllFailedError };
 
 export interface SearchChain {
   search(query: string, opts: SearchOpts): Promise<{ hits: SearchHit[]; engine: SearchEngine }>;
@@ -1325,21 +1333,19 @@ export class RobotsGuard {
 function parseDisallow(txt: string): string[] {
   const lines = txt.split(/\r?\n/).map((l) => l.replace(/#.*$/, '').trim());
   const groups: Array<{ agents: string[]; disallow: string[] }> = [];
+  let current: { agents: string[]; disallow: string[] } | null = null;
   for (const line of lines) {
     const m = line.match(/^(user-agent|disallow)\s*:\s*(.*)$/i);
     if (!m) continue;
     const [, key, val] = m;
     if (key.toLowerCase() === 'user-agent') {
-      groups.push({ agents: [val.toLowerCase()], disallow: [] });
-    } else {
-      for (let i = groups.length - 1; i >= 0; i--) {
-        if (groups[i].agents.includes('*')) groups[i].disallow.push(val);
-        else break;
-      }
+      if (current && current.disallow.length === 0) current.agents.push(val.toLowerCase());
+      else { current = { agents: [val.toLowerCase()], disallow: [] }; groups.push(current); }
+    } else if (current) {
+      current.disallow.push(val);
     }
   }
-  const star = groups.filter((g) => g.agents.includes('*'));
-  return star.flatMap((g) => g.disallow);
+  return groups.filter((g) => g.agents.includes('*')).flatMap((g) => g.disallow);
 }
 
 export function createFetcher(robots: RobotsGuard, fetchImpl: FetchImpl = globalThis.fetch as FetchImpl): Fetcher {
@@ -1412,7 +1418,6 @@ describe('prompts v1', () => {
     const all = msgs.map((m) => m.content).join('\n');
     expect(all).toContain('[1] 资料 A');
     expect(all).toContain('建制沿革');
-    expect(all.toContain ? true : true).toBe(true);
     expect(all).toMatch(/\[n\]/);
     expect(all).toContain('不得编造');
   });
@@ -1463,7 +1468,7 @@ const PLANNING_SYSTEM = `你是资深中国历史地理研究员。根据地点�
 export function planningMessages(place: PromptPlace, direction: Direction, extra?: string): ChatMsg[] {
   return [
     { role: 'system', content: PLANNING_SYSTEM },
-    { role: 'user', content: `地点:${place.name}(位于${place.province}${place.county})\n研究方向:${direction}${extra ? `\n用户补充要求:${extra}` : ''}\n\n请给出研究子问题。` },
+    { role: 'user', content: `地点:${place.name}(位于${place.province}${place.county})\n研究方向:${direction}${extra ? `\n用户补充要求:${extra}` : ''}\n\n请给出研究子问题,JSON 格式:{"subQuestions":["..."]}` },
   ];
 }
 
@@ -1511,7 +1516,7 @@ export function parsePlan(out: string): string[] {
     try {
       const j = JSON.parse(m[0]) as { subQuestions?: unknown };
       if (Array.isArray(j.subQuestions)) {
-        const qs = j.subQuestions.filter((q): q is string => typeof q === 'string' && q.trim().length > 2);
+        const qs = j.subQuestions.filter((q): q is string => typeof q === 'string' && q.trim().length > 1);
         if (qs.length) return qs.slice(0, 8);
       }
     } catch { /* fallthrough */ }
@@ -1629,7 +1634,8 @@ git commit -m "feat: 引用编号包构建与幻觉引用剔除"
 ### Task 9: 状态机 / 事件总线 / 任务注册表
 
 **Files:**
-- Create: `src/server/orchestrator/machine.ts`, `src/server/orchestrator/events.ts`, `src/instrumentation.ts`
+- Create: `src/server/orchestrator/machine.ts`, `src/server/orchestrator/events.ts`
+- ~~Create: `src/instrumentation.ts`~~(Task 11 修复中移除:Next 会把 instrumentation 编译到 edge 运行时,无法解析 better-sqlite3 的 require('fs'),导致 dev/全路由 500;生命周期改为 repo.ts 的 getRepo() 首次调用时懒安装——sweepStaleTasks + SIGTERM/SIGINT abortAll)
 - Test: `tests/machine.test.ts`, `tests/events.test.ts`
 
 **Interfaces:**
@@ -1794,20 +1800,20 @@ export class TaskEventBus {
 export const bus = new TaskEventBus();
 ```
 
-`src/instrumentation.ts`(Next 启动钩子:清陈旧任务 + 优雅停机):
+`src/server/db/repo.ts` 生命周期懒安装(Task 11 修复后;替代已移除的 instrumentation.ts):
 ```ts
-export async function register(): Promise<void> {
-  if (process.env.NEXT_RUNTIME !== 'nodejs') return;
-  const { getRepo } = await import('@/server/db/repo');
-  getRepo().sweepStaleTasks();
-  const { registry } = await import('@/server/orchestrator/machine');
-  const shutdown = () => {
-    registry.abortAll();
-    setTimeout(() => process.exit(0), 500);
-  };
+import { registry } from '@/server/orchestrator/machine';
+
+let _lifecycle = false;
+function installLifecycle(sweep: () => void): void {
+  if (_lifecycle) return;
+  _lifecycle = true;
+  sweep();
+  const shutdown = () => { registry.abortAll(); setTimeout(() => process.exit(0), 500); };
   process.on('SIGTERM', shutdown);
   process.on('SIGINT', shutdown);
 }
+// getRepo() 首次调用时:installLifecycle(() => createRepo(getDb()).sweepStaleTasks())
 ```
 
 - [ ] **Step 4: 跑测试确认通过**
@@ -1929,7 +1935,9 @@ describe('runTask', () => {
   });
   it('LLM 全挂 → failed / llm_all_failed', async () => {
     repo.createTask({ ...TASK, id: 't5' });
-    const badLlm: LlmProvider = { name: 'deepseek', chatStream: () => ({ usage: Promise.reject(new Error('x')), stream: (async function* () { throw new Error('x'); })() }) };
+    const badUsage = Promise.reject(new Error('x'));
+    badUsage.catch(() => {});
+    const badLlm: LlmProvider = { name: 'deepseek', chatStream: () => ({ usage: badUsage, stream: (async function* () { throw new Error('x'); })() }) };
     await runTask('t5', deps({ llm: createLlmChain([badLlm]) }));
     expect(repo.getTask('t5')!.error_code).toBe('llm_all_failed');
   });
@@ -2072,7 +2080,7 @@ export async function runTask(taskId: string, deps: PipelineDeps, signal?: Abort
 
     // ---- searching(自适应多轮) ----
     const ts = Date.now();
-    phase('searching', '开始多轮检索', 0);
+    phase('searching', '开始自适应检索', 0);
     const kept = new Map<string, { hit: SearchHit; subQ: number }>();
     const coverage = new Array<number>(plan.length).fill(0);
     let anySearchOk = false;
@@ -2434,11 +2442,12 @@ export async function POST(req: Request): Promise<Response> {
   const stream = new ReadableStream<Uint8Array>({
     start(controller) {
       let closed = false;
+      let hb: ReturnType<typeof setInterval> | undefined;
       const send = (event: string, data: unknown) => controller.enqueue(enc.encode(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`));
       const close = () => {
         if (closed) return;
         closed = true;
-        clearInterval(hb);
+        if (hb) clearInterval(hb);
         try { controller.close(); } catch { /* already closed */ }
       };
       const task = () => repo.getTask(taskId)!;
@@ -2455,7 +2464,8 @@ export async function POST(req: Request): Promise<Response> {
         send(e.event, e.data);
         if (e.event === 'done' || e.event === 'error') { unsub(); close(); }
       });
-      const hb = setInterval(() => { if (!closed) { try { controller.enqueue(enc.encode(': ping\n\n')); } catch { /* noop */ } } }, 15_000);
+      const hbTimer = setInterval(() => { if (!closed) { try { controller.enqueue(enc.encode(': ping\n\n')); } catch { /* noop */ } } }, 15_000);
+      hb = hbTimer;
       req.signal.addEventListener('abort', () => { unsub(); close(); });
     },
   });

@@ -101,13 +101,17 @@ function ensureLifecycle(repo: Repo): void {
   if (_lifecycle) return;
   _lifecycle = true;
   try {
-    repo.sweepStaleTasks();
-    const shutdown = () => {
-      registry.abortAll();
-      setTimeout(() => process.exit(0), 500);
-    };
-    process.on('SIGTERM', shutdown);
-    process.on('SIGINT', shutdown);
+    // 安装即全量清扫:服务重启后,所有非终态任务(僵尸)不论新旧一律标 failed/stale_task。
+    // maxAgeMs=0 → 条件退化为 updated_at < now,与年龄无关;不加周期定时器,重启即一次。
+    repo.sweepStaleTasks(0);
+    if (process.env.NODE_ENV !== 'test') {
+      const shutdown = () => {
+        registry.abortAll();
+        setTimeout(() => process.exit(0), 500);
+      };
+      process.on('SIGTERM', shutdown);
+      process.on('SIGINT', shutdown);
+    }
   } catch {
     // 防御:dev HMR 重复导入等场景下不得让 getRepo() 抛错
   }
@@ -121,4 +125,4 @@ export function getRepo(): Repo {
   return _repo;
 }
 
-export function __resetRepoForTests(): void { _repo = undefined; }
+export function __resetRepoForTests(): void { _repo = undefined; _lifecycle = false; }

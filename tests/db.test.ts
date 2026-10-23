@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach } from 'vitest';
-import { openDb, migrate } from '@/server/db/client';
-import { createRepo } from '@/server/db/repo';
+import { openDb, migrate, __setDbForTests } from '@/server/db/client';
+import { createRepo, getRepo, __resetRepoForTests } from '@/server/db/repo';
 import type Database from 'better-sqlite3';
 
 let repo: ReturnType<typeof createRepo>;
@@ -71,5 +71,22 @@ describe('repo cache', () => {
     expect(repo.cacheGet('k1')?.task_id).toBe('t1');
     repo.cachePut('k2', 't1', -1);
     expect(repo.cacheGet('k2')).toBeUndefined();
+  });
+});
+
+describe('getRepo 生命周期(重启清扫)', () => {
+  it('安装即全量清扫:searching 且 updated_at 新鲜的行也标 failed/stale_task(与年龄无关)', async () => {
+    const db = openDb(':memory:');
+    __setDbForTests(db); // getRepo() 经 getDb() 必须落在这张测试库上,不得碰真实库
+    const r = createRepo(db);
+    r.createTask({ ...task, id: 't_restart' });
+    r.updateTask('t_restart', { status: 'searching' }); // 非终态 + 新鲜 updated_at(旧语义 5 分钟阈值不会清它)
+    await new Promise((res) => setTimeout(res, 3)); // 0 阈值条件为 updated_at < now,避开同毫秒
+    __resetRepoForTests();
+    getRepo(); // 模拟进程重启后首次安装
+    const t = r.getTask('t_restart')!;
+    expect(t.status).toBe('failed');
+    expect(t.error_code).toBe('stale_task');
+    __resetRepoForTests(); // 还原模块单例状态,不影响其他测试
   });
 });

@@ -64,6 +64,10 @@ export function scoreHit(hit: SearchHit, placeName: string): number {
   return s;
 }
 
+// 组合任务信号与阶段预算上限:任一触发即中止(Node ≥20.3 AbortSignal.any)
+const withBudget = (signal: AbortSignal | undefined, ms: number): AbortSignal =>
+  AbortSignal.any([signal ?? new AbortController().signal, AbortSignal.timeout(ms)]);
+
 export async function runTask(taskId: string, deps: PipelineDeps, signal?: AbortSignal): Promise<void> {
   const { repo, cfg } = deps;
   const t0 = Date.now();
@@ -99,7 +103,7 @@ export async function runTask(taskId: string, deps: PipelineDeps, signal?: Abort
     phase('planning', '正在拆解研究子问题');
     let plan: string[];
     {
-      const call = deps.llm.chatStream({ model: cfg.DEEPSEEK_MODEL, messages: planningMessages(promptPlace, task.direction as Direction, task.extra_instruction ?? undefined), temperature: 0.3, signal });
+      const call = deps.llm.chatStream({ messages: planningMessages(promptPlace, task.direction as Direction, task.extra_instruction ?? undefined), temperature: 0.3, signal: withBudget(signal, BUDGETS_MS.planning) });
       let out = '';
       for await (const c of call.stream) out += c.delta ?? '';
       const u = await call.usage;
@@ -159,10 +163,10 @@ export async function runTask(taskId: string, deps: PipelineDeps, signal?: Abort
       rowIdByUrlNorm.set(k.urlNorm, rowId);
     }
 
-    const synthesize = async (msgs: ChatMsg[]): Promise<string> => {
+    const synthesize = async (msgs: ChatMsg[], budgetMs: number): Promise<string> => {
       phase('synthesizing', '综合成文');
       const tSyn = Date.now();
-      const call = deps.llm.chatStream({ model: cfg.DEEPSEEK_MODEL, messages: msgs, temperature: 0.5, maxTokens: 4096, signal });
+      const call = deps.llm.chatStream({ messages: msgs, temperature: 0.5, maxTokens: 4096, signal: withBudget(signal, budgetMs) });
       let full = '', held = '';
       for await (const c of call.stream) {
         const d = c.delta ?? '';
@@ -189,7 +193,7 @@ export async function runTask(taskId: string, deps: PipelineDeps, signal?: Abort
       repo.appendTimeline(taskId, { phase: 'scarce', note: `资料稀缺(${keptList.length} 源),降级输出`, ts: Date.now() });
       emit('progress', { phase: 'scarce', note: `资料稀缺(${keptList.length} 源),降级输出`, ts: Date.now() });
       const adminCtx = [place.province, place.city, place.county, place.village].filter(Boolean).join('');
-      const raw = await synthesize(scarceMessages(promptPlace, adminCtx, keptList.map((s) => s.snippet).join('\n')));
+      const raw = await synthesize(scarceMessages(promptPlace, adminCtx, keptList.map((s) => s.snippet).join('\n')), BUDGETS_MS.scarce);
       finalMd = `> ⚠️ 公开资料稀缺,以下为该地行政区划与地理背景,不含未经证实的细节。\n\n${raw.trim()}\n\n## 来源\n${keptList.map((s) => `${s.idx}. [${s.title}](${s.url})`).join('\n')}\n`;
     } else {
       // ---- fetching ----
@@ -212,7 +216,7 @@ export async function runTask(taskId: string, deps: PipelineDeps, signal?: Abort
       timings.fetchingMs = Date.now() - tf;
 
       // ---- synthesizing ----
-      const raw = await synthesize(synthesisMessages(promptPlace, task.direction as Direction, plan, buildSourcePack(keptList), pages.join('\n\n')));
+      const raw = await synthesize(synthesisMessages(promptPlace, task.direction as Direction, plan, buildSourcePack(keptList), pages.join('\n\n')), BUDGETS_MS.synthesize);
       const { report, invalidCount } = validateCitations(raw, keptList.length);
       if (invalidCount > 0) repo.appendTimeline(taskId, { phase: 'synthesizing', note: `剔除 ${invalidCount} 个无效引用标记`, ts: Date.now() });
       finalStatus = 'completed';
@@ -246,6 +250,9 @@ export async function startResearch(input: ResearchInput): Promise<{ taskId: str
   const id = nanoid(12);
   deps.repo.createTask({ id, place_name: placeDisplayName(input.place), place_json: JSON.stringify(input.place), lat: input.lat, lng: input.lng, direction: input.direction, extra_instruction: input.extra });
   const ac = registry.register(id);
-  void runTask(id, deps, ac.signal).finally(() => registry.release(id));
+  const hardTimer = setTimeout(() => registry.abort(id), BUDGETS_MS.taskHard); // 硬上限看门狗:abort → AbortError → catch 归为 timeout
+  void runTask(id, deps, ac.signal)
+    .catch(() => {}) // runTask 自身已兜底;此处防御性吞掉意外 rejection,finally 仍执行
+    .finally(() => { clearTimeout(hardTimer); registry.release(id); });
   return { taskId: id, cached: false };
 }

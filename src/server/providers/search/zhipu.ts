@@ -15,7 +15,7 @@ export function createZhipu(engine: 'zhipu_std' | 'zhipu_pro' | 'zhipu_sogou', g
       const f = opts.fetchImpl ?? fetch;
       const resp = await f(ZHIPU_TOOLS_URL, {
         method: 'POST',
-        signal: opts.signal ?? AbortSignal.timeout(15_000),
+        signal: AbortSignal.any([opts.signal ?? new AbortController().signal, AbortSignal.timeout(15_000)]),
         headers: { 'content-type': 'application/json', authorization: `Bearer ${key}` },
         body: JSON.stringify({
           tool: 'web_search',

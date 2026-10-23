@@ -52,7 +52,7 @@ export function createFetcher(robots: RobotsGuard, fetchImpl: FetchImpl = global
       try {
         if (!(await robots.allowed(url))) return { url, title: '', text: '', chars: 0, ok: false, reason: 'robots' };
         const resp = await fetchImpl(url, {
-          signal: signal ?? AbortSignal.timeout(15_000),
+          signal: AbortSignal.any([signal ?? new AbortController().signal, AbortSignal.timeout(15_000)]),
           headers: { 'user-agent': UA },
         });
         if (!resp.ok) return { url, title: '', text: '', chars: 0, ok: false, reason: `http_${resp.status}` };

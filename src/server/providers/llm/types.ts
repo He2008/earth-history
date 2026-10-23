@@ -1,6 +1,6 @@
 export interface ChatMsg { role: 'system' | 'user' | 'assistant'; content: string }
 export interface LlmRequest {
-  model: string; messages: ChatMsg[];
+  model?: string; messages: ChatMsg[]; // model 可选:提供方自默认(DeepSeek/智谱各取其配置)
   temperature?: number; maxTokens?: number; signal?: AbortSignal;
 }
 export interface LlmChunk { delta?: string }

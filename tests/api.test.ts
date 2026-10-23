@@ -13,6 +13,7 @@ beforeEach(() => {
   const db = openDb(':memory:');
   __setDbForTests(db);
   __resetRepoForTests();
+  getRepo(); // 先安装生命周期(空库上做启动全量清扫),之后 seed 的运行中任务不会被安装清扫误标 failed
   repo = createRepo(db);
 });
 
@@ -82,6 +83,12 @@ describe('POST /api/research', () => {
     expect(resp.status).toBe(400);
     expect(await resp.json()).toMatchObject({ error: { code: 'invalid_params' } });
   });
+  it('runner.start 抛错 → 500 internal 错误包络', async () => {
+    setRunner({ async start() { throw new Error('boom'); } });
+    const resp = await POST(new Request('http://x/api/research', { method: 'POST', body: JSON.stringify(body), headers: { 'content-type': 'application/json' } }));
+    expect(resp.status).toBe(500);
+    expect(await resp.json()).toMatchObject({ error: { code: 'internal', message: 'Error: boom' } });
+  });
   it('正常创建 → SSE 依次 task_created/content/done,任务经 getRepo 落库', async () => {
     useFakeRunner();
     const resp = await POST(new Request('http://x/api/research', { method: 'POST', body: JSON.stringify(body), headers: { 'content-type': 'application/json' } }));
@@ -106,6 +113,25 @@ describe('POST /api/research', () => {
     expect(events[0].data).toMatchObject({ taskId: 't_api', cached: true });
     expect(events[1].data).toEqual({ delta: '# 报告' });
     expect(getRepo().getTask('t_api')!.status).toBe('completed');
+  });
+  it('缓存回放来源口径:kept/cited/fetched 三态全进 sources,done.sourcesKept === 3', async () => {
+    const seed = (stage: string, idx: number) => repo.insertSource({ task_id: 't_api', idx, stage, title: `源${idx}`, url: `https://x/${idx}`, url_norm: `https://x/${idx}`, snippet: 's', published_at: null, engine: 'bocha', score: 1, fetched_chars: null, quote: null });
+    setRunner({
+      async start() {
+        seedRunningTask();
+        repo.updateTask('t_api', { status: 'completed', report_md: '# 报告' });
+        seed('kept', 1);
+        seed('cited', 2);
+        seed('fetched', 3);
+        return { taskId: 't_api', cached: true };
+      },
+    });
+    const resp = await POST(new Request('http://x/api/research', { method: 'POST', body: JSON.stringify(body), headers: { 'content-type': 'application/json' } }));
+    const events = await readSseFull(resp);
+    const sources = events.find((e) => e.event === 'sources')!;
+    expect((sources.data as { items: Array<{ title: string }> }).items.map((s) => s.title)).toEqual(['源1', '源2', '源3']);
+    const done = events.find((e) => e.event === 'done')!;
+    expect((done.data as { sourcesKept: number }).sourcesKept).toBe(3);
   });
 });
 

@@ -12,7 +12,7 @@ export function createBocha(getKey: () => string): SearchProvider {
       const f = opts.fetchImpl ?? fetch;
       const resp = await f(BOCHA_URL, {
         method: 'POST',
-        signal: opts.signal ?? AbortSignal.timeout(15_000),
+        signal: AbortSignal.any([opts.signal ?? new AbortController().signal, AbortSignal.timeout(15_000)]),
         headers: { 'content-type': 'application/json', authorization: `Bearer ${key}` },
         body: JSON.stringify({ query, count: opts.count ?? 10, freshness: 'noLimit', summary: true, page: 1 }),
       });

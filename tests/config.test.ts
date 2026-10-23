@@ -10,6 +10,7 @@ describe('loadConfig', () => {
     expect(c.FETCH_CONCURRENCY).toBe(4);
     expect(c.DB_PATH).toBe('data/shidi.db');
     expect(c.DEEPSEEK_MODEL).toBe('deepseek-chat');
+    expect(c.LLM_BACKUP_MODEL).toBe('glm-4-flash');
   });
   it('SEARCH_MODE 非法值抛错', () => {
     expect(() => loadConfig({ SEARCH_MODE: 'baidu' })).toThrow();

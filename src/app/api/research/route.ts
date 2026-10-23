@@ -27,7 +27,13 @@ export async function POST(req: Request): Promise<Response> {
     return Response.json({ error: { code: 'invalid_params', message: parsed.error.issues[0]?.message ?? '参数错误' } }, { status: 400 });
   }
   const repo = getRepo();
-  const { taskId, cached } = await getRunner().start(parsed.data as never);
+  let started: { taskId: string; cached: boolean };
+  try {
+    started = await getRunner().start(parsed.data as never);
+  } catch (e) {
+    return Response.json({ error: { code: 'internal', message: String(e) } }, { status: 500 });
+  }
+  const { taskId, cached } = started;
 
   const enc = new TextEncoder();
   const stream = new ReadableStream<Uint8Array>({
@@ -45,8 +51,10 @@ export async function POST(req: Request): Promise<Response> {
       send('task_created', { taskId, place: JSON.parse(task().place_json), cached });
       if (cached) {
         send('content', { delta: task().report_md });
-        send('sources', { items: repo.listSources(taskId, 'kept').map((s) => ({ idx: s.idx, title: s.title, url: s.url, site: '', date: s.published_at })) });
-        send('done', { taskId, status: task().status, elapsedMs: 0, sourcesKept: 0, scarcity: task().status === 'scarce', cached: true });
+        // 与 GET /:id、/:id/poll 同一过滤口径:kept|cited|fetched 均计为可用来源
+        const srcs = repo.listSources(taskId).filter((s) => ['kept', 'cited', 'fetched'].includes(s.stage));
+        send('sources', { items: srcs.map((s) => ({ idx: s.idx, title: s.title, url: s.url, site: '', date: s.published_at })) });
+        send('done', { taskId, status: task().status, elapsedMs: 0, sourcesKept: srcs.length, scarcity: task().status === 'scarce', cached: true });
         close();
         return;
       }

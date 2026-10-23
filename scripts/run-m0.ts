@@ -13,6 +13,9 @@ async function runOne(loc: (typeof locations)[number]): Promise<SummaryRow> {
     headers: { 'content-type': 'application/json' },
     body: JSON.stringify({ lat: loc.lat, lng: loc.lng, place: loc.place, direction: loc.direction }),
   });
+  if (!resp.ok) {
+    return { name: loc.name, slug: loc.slug, status: `failed:http_${resp.status}`, sourcesKept: 0, yuan: 0, elapsedMs: Date.now() - t0 };
+  }
   let md = '';
   let status = 'unknown';
   let sourcesKept = 0;

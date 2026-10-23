@@ -7,7 +7,7 @@ export async function GET(_req: Request, ctx: { params: Promise<{ id: string }> 
   if (!t) return Response.json({ error: { code: 'not_found', message: '任务不存在' } }, { status: 404 });
   const timeline = JSON.parse(t.timeline_json || '[]') as Array<{ round?: number }>;
   const done = ['completed', 'scarce', 'failed'].includes(t.status);
-  const sources = repo.listSources(id).filter((s) => s.stage === 'kept' || s.stage === 'cited');
+  const sources = repo.listSources(id).filter((s) => s.stage === 'kept' || s.stage === 'cited' || s.stage === 'fetched'); // 与 GET /:id 同口径
   const lastRound = [...timeline].reverse().find((e) => e.round != null)?.round ?? 0;
   return Response.json({
     taskId: id,

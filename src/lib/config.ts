@@ -5,7 +5,7 @@ const EnvSchema = z.object({
   ZHIPU_API_KEY: z.string().default(''),
   DEEPSEEK_API_KEY: z.string().default(''),
   DEEPSEEK_MODEL: z.string().default('deepseek-chat'),
-  QWEN_MODEL: z.string().default('qwen-plus'),
+  LLM_BACKUP_MODEL: z.string().default('glm-4-flash'),
   SEARCH_MODE: z.enum(['bocha', 'zhipu', 'ab']).default('bocha'),
   SCARCITY_THRESHOLD: z.coerce.number().default(3),
   REPORT_MAX_SOURCES: z.coerce.number().default(12),
