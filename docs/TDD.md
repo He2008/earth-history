@@ -19,7 +19,7 @@
 │ MapLibre 地球 │ ──────────────────→ │ orchestrator               │
 │ + 研究面板    │ ←───── SSE 流 ────── │  machine/pipeline/citations│
 └──────────────┘                     │  ├ search: 博查→智谱(降级链)│
-  刷新/断线 → GET /:id、/:id/poll     │  ├ llm:    DeepSeek→Qwen   │
+  刷新/断线 → GET /:id、/:id/poll     │  ├ llm:    DeepSeek→智谱GLM │
                                      │  ├ fetch:  readability     │
                                      │  └ geocode:天地图→县界兜底  │
                                      │ db(SQLite):tasks/sources/cache│
@@ -62,7 +62,7 @@ queued → planning → searching → fetching → synthesizing → completed
 
 | 状态 | 职责 | 持久化 | 预算/超时 | 超时动作 |
 |---|---|---|---|---|
-| queued | 建行即返回 taskId | 全量初始字段 | <1s 被调度 | 启动扫描:非终态且 updated_at>5min → failed(stale) |
+| queued | 建行即返回 taskId | 全量初始字段 | <1s 被调度 | 启动清扫:首次 `getRepo()` 时把**所有**非终态行清为 failed(stale_task)——单进程重启后运行中任务必死,不做 5min 宽限 |
 | planning | LLM 拆 5-8 子问题 | status/direction/extra/plan | 60s | 重试 1 次 → failed(llm) |
 | searching | 4-6 轮自适应并行搜索 | 每轮:plan_json、sources(candidate/kept)、timeline | 单 query 15s;轮预算 45s;总 150s(软) | 单 query 换引擎重试 1 次;总超时带现有结果进 fetching |
 | fetching | top≤12 URL 并发抓取(并发 4) | sources(fetched/fetched_chars/quote) | 单 URL 15s;总 60s(软) | 放弃该 URL,snippet 兜底 |
@@ -71,8 +71,9 @@ queued → planning → searching → fetching → synthesizing → completed
 | scarce | kept<3 → 降级模板成文(区划沿革+地理背景) | 同 completed + scarcity 标记 | 90s | 同 synthesizing |
 | failed | 错误终态 | error_code/error_msg | — | — |
 
-- **任务硬上限 10 分钟**,超时强制 failed(timeout, retryable)
+- **任务硬上限 10 分钟**,由 startResearch 的看门狗强制(超时 `registry.abort(id)` → AbortError → failed(timeout))
 - **timeline_json**:每次状态迁移/每轮搜索 append `{phase, round, note, ts}`;进度条与刷新恢复共用这一份
+- **生命周期钩子懒安装**:不用 instrumentation.ts(Next 会把它编译到 edge 运行时,无法解析 better-sqlite3 的 require('fs'),曾致 dev 全路由 500);清扫+SIGTERM/SIGINT 改在 `getRepo()` 首次调用时安装(NODE_ENV=test 不装信号处理器)
 - **服务重启不续跑**:shutdown 时 abort 运行中管线 → failed(interrupted, retryable);重试从头开始(M0 简化,单次成本 ≤¥0.25 可接受)
 
 ## 4. DB Schema(SQLite 三张表)
@@ -179,10 +180,11 @@ interface SearchProvider {
     signal?: AbortSignal }): Promise<SearchHit[]>;
 }
 
+interface LlmRequest { model?: string; messages: ChatMsg[];   // model 省略时各 provider 用自己的默认模型
+  temperature?: number; maxTokens?: number; signal?: AbortSignal }
 interface LlmProvider {
-  readonly name: 'deepseek' | 'qwen';
-  chatStream(req: { model: string; messages: ChatMsg[]; temperature?: number;
-    maxTokens?: number; signal?: AbortSignal }): AsyncIterable<{ delta?: string }>;
+  readonly name: 'deepseek' | 'qwen' | 'llm-chain';
+  chatStream(req: LlmRequest): LlmCall;   // LlmCall = { stream, usage: Promise<LlmUsage> }
 }
 
 interface FetchedPage { url: string; title: string; text: string;
@@ -191,9 +193,10 @@ interface Fetcher { fetch(url: string, signal?: AbortSignal): Promise<FetchedPag
 // readability 去噪,正文截断 ~8K 字;预留 og:image 字段(P1 配图管线)
 ```
 
-- **降级链**:Search `[bocha → zhipu_std → zhipu_pro]`;LLM `[deepseek → qwen]`。策略:超时/5xx → 同家重试 1 次 → 下一家;同家连续 3 次失败 → 进程内熔断 5 分钟
+- **降级链**:LLM `[deepseek → qwen(智谱 GLM)]`。DeepSeek 直连 api.deepseek.com;备用 provider 复用智谱 key 走其 OpenAI 兼容端点(open.bigmodel.cn/api/paas/v4),模型 `LLM_BACKUP_MODEL`(默认 glm-4-flash)——避免第四把 key,与 PRD §5.3「GLM 备用 LLM」一致。策略:超时/5xx → 同家重试 1 次 → 下一家;同家连续 3 次失败 → 进程内熔断 5 分钟
+- **每调用超时组合**:搜索/抓取的 15s 上限与任务级 signal 用 `AbortSignal.any` 组合(管线传 signal 时 15s 仍生效);LLM 调用按阶段预算组合(planning 60s / synthesize 180s / scarce 90s)
 - **轮次引擎策略**(可配置):R1 广搜 bocha(count=10)→ R2+ 缺口补搜 zhipu_std → R3+ 深挖 zhipu_sogou(知乎/腾讯生态);`SEARCH_MODE=ab` 时同任务双引擎全跑,供 M0 A/B
-- Fetcher 规则:遵守 robots.txt、单域串行、只存摘要与被引单句
+- Fetcher 规则:遵守 robots.txt(REP 连续 UA 行合并分组)、单域串行(M1 强化)、只存摘要与被引单句
 
 ## 8. 流水线细节
 
@@ -237,7 +240,7 @@ run(task):
 | TIANDITU_KEY_SERVER / TIANDITU_KEY_BROWSER | 逆编码 / 瓦片,分 key 管理 |
 | SEARCH_MODE = bocha\|zhipu\|ab | M0 A/B 开关 |
 | SCARCITY_THRESHOLD=3 / REPORT_MAX_SOURCES=12 / FETCH_CONCURRENCY=4 | 流水线阈值 |
-| DEEPSEEK_MODEL=deepseek-chat / QWEN_MODEL | 模型名 |
+| DEEPSEEK_MODEL=deepseek-chat / LLM_BACKUP_MODEL=glm-4-flash | 主/备 LLM 模型名 |
 
 密钥仅服务端;浏览器可见的只有 TIANDITU_KEY_BROWSER。
 

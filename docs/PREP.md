@@ -2,6 +2,8 @@
 
 > 配套 `PRD.md` 使用 · 状态:待执行
 > 原则:**最小前置**——只办阻碍开工的事,文档随里程碑滚动补齐,不做纸面工程
+>
+> **2026-10-23 更新**:M0 编排器代码已实现并通过终审(分支 `m0-orchestrator`,15 文件 75 测试全绿,`next build` 通过;实施计划见 `docs/superpowers/plans/`)。**下一步 = 办齐 1.1/1.1b/1.2 三把 key → `npm run dev` + `npm run m0` 跑 D3 十地点盲评**。
 
 ---
 
@@ -20,7 +22,7 @@
 
 ## 2. 必写文档(仅 3 份,均为开工文档)
 
-### D1. 技术设计文档(TDD)— ✅ v1 已完成 → `docs/TDD.md`(2026-10-22,257 行)
+### D1. 技术设计文档(TDD)— ✅ v1.2 已完成 → `docs/TDD.md`(261 行;v1.2 同步 M0 实现裁定:GLM 备用 LLM、超时组合、启动全量清扫、生命周期懒安装)
 回答"怎么实现",PRD 回答"做什么"。篇幅控制在 300 行内,含:
 - **编排器状态机**:`queued → planning → searching → fetching → synthesizing → completed / failed / scarce`,每态的持久化字段与超时策略
 - **DB schema**(SQLite 起步):research_tasks、sources、research_cache(同地点 30 天回放,键 = 地名 + 坐标)三张表(anonymous_rate_limits 随 P1 限流功能再加)
