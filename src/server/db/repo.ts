@@ -48,6 +48,9 @@ export function createRepo(db: Database.Database) {
   const getTask = (id: string): TaskRow | undefined =>
     db.prepare('SELECT * FROM research_tasks WHERE id=?').get(id) as TaskRow | undefined;
 
+  const getTaskByShareToken = (token: string): TaskRow | undefined =>
+    db.prepare('SELECT * FROM research_tasks WHERE share_token=? LIMIT 1').get(token) as TaskRow | undefined;
+
   const updateTask = (id: string, patch: Record<string, unknown>) => {
     const keys = assertPatchKeys(patch, ALLOWED_TASK_PATCH_KEYS);
     if (!keys.length) return;
@@ -107,7 +110,7 @@ export function createRepo(db: Database.Database) {
                 WHERE status NOT IN ('completed','scarce','failed') AND updated_at < ?`)
       .run(now(), now(), now() - maxAgeMs).changes);
 
-  return { createTask, getTask, updateTask, appendTimeline, saveReportDelta, insertSource, updateSource, dropCandidates, listSources, cachePut, cacheGet, sweepStaleTasks };
+  return { createTask, getTask, getTaskByShareToken, updateTask, appendTimeline, saveReportDelta, insertSource, updateSource, dropCandidates, listSources, cachePut, cacheGet, sweepStaleTasks };
 }
 
 export type Repo = ReturnType<typeof createRepo>;

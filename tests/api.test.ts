@@ -6,6 +6,8 @@ import { bus } from '@/server/orchestrator/events';
 import { POST } from '@/app/api/research/route';
 import { GET as getTaskRoute } from '@/app/api/research/[id]/route';
 import { GET as pollRoute } from '@/app/api/research/[id]/poll/route';
+import { GET as shareRoute } from '@/app/api/share/[token]/route';
+import { POST as feedbackRoute } from '@/app/api/research/[id]/feedback/route';
 
 let repo: Repo;
 
@@ -169,6 +171,57 @@ describe('GET /api/research/:id/poll', () => {
   });
   it('不存在 → 404 not_found', async () => {
     const resp = await pollRoute(new Request('http://x'), { params: Promise.resolve({ id: 'nope' }) });
+    expect(resp.status).toBe(404);
+  });
+});
+
+describe('GET /api/share/:token', () => {
+  it('有效 token → 公开只读载荷(place/direction/report_md/sources/created_at/scarcity)', async () => {
+    seedRunningTask();
+    repo.updateTask('t_api', { status: 'completed', report_md: '# 报告', share_token: 'tok123', finished_at: 1 });
+    repo.insertSource({ task_id: 't_api', idx: 1, stage: 'cited', title: '云龙县志', url: 'https://a/1', url_norm: 'https://a/1', snippet: 's', published_at: '2024-01-01', engine: 'bocha', score: 1, fetched_chars: null, quote: '被引句' });
+    const resp = await shareRoute(new Request('http://x'), { params: Promise.resolve({ token: 'tok123' }) });
+    expect(resp.status).toBe(200);
+    const j = await resp.json();
+    expect(j.place).toEqual({ province: '云南省', city: '大理州', county: '云龙县', village: '诺邓村' });
+    expect(j.direction).toBe('综合沿革');
+    expect(j.report_md).toBe('# 报告');
+    expect(j.scarcity).toBe(false);
+    expect(j.sources).toHaveLength(1);
+    expect(j.sources[0]).toMatchObject({ idx: 1, title: '云龙县志', url: 'https://a/1' });
+    expect(typeof j.created_at).toBe('number');
+  });
+  it('无 token / 无效 token → 404 not_found,不泄漏存在性', async () => {
+    const miss = await shareRoute(new Request('http://x'), { params: Promise.resolve({ token: 'nope' }) });
+    expect(miss.status).toBe(404);
+    expect(await miss.json()).toMatchObject({ error: { code: 'not_found' } });
+  });
+  it('任务未完成(无 share_token)→ 404', async () => {
+    seedRunningTask(); // 运行中任务 share_token 为 null
+    const resp = await shareRoute(new Request('http://x'), { params: Promise.resolve({ token: 'null' }) });
+    expect(resp.status).toBe(404);
+  });
+});
+
+describe('POST /api/research/:id/feedback', () => {
+  it('value 1/-1 → 落库 feedback 列并返回 ok', async () => {
+    seedRunningTask();
+    const resp = await feedbackRoute(new Request('http://x', { method: 'POST', body: JSON.stringify({ value: 1 }), headers: { 'content-type': 'application/json' } }), { params: Promise.resolve({ id: 't_api' }) });
+    expect(resp.status).toBe(200);
+    expect(await resp.json()).toEqual({ ok: true });
+    expect(getRepo().getTask('t_api')!.feedback).toBe(1);
+    const resp2 = await feedbackRoute(new Request('http://x', { method: 'POST', body: JSON.stringify({ value: -1 }), headers: { 'content-type': 'application/json' } }), { params: Promise.resolve({ id: 't_api' }) });
+    expect(resp2.status).toBe(200);
+    expect(getRepo().getTask('t_api')!.feedback).toBe(-1);
+  });
+  it('value 非 1/-1 → 400 invalid_params', async () => {
+    seedRunningTask();
+    const resp = await feedbackRoute(new Request('http://x', { method: 'POST', body: JSON.stringify({ value: 5 }), headers: { 'content-type': 'application/json' } }), { params: Promise.resolve({ id: 't_api' }) });
+    expect(resp.status).toBe(400);
+    expect(await resp.json()).toMatchObject({ error: { code: 'invalid_params' } });
+  });
+  it('任务不存在 → 404', async () => {
+    const resp = await feedbackRoute(new Request('http://x', { method: 'POST', body: JSON.stringify({ value: 1 }), headers: { 'content-type': 'application/json' } }), { params: Promise.resolve({ id: 'nope' }) });
     expect(resp.status).toBe(404);
   });
 });
