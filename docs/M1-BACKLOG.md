@@ -37,3 +37,10 @@
 - ~~OOM 崩溃链~~ 已修:fetcher 响应体 2MB 字节上限(曾致 node V8 堆耗尽崩溃,连杀整批任务);robots.txt 5s 超时+接入任务信号(曾致抓取阶段挂死 14 分钟,且硬上限 abort 打不断)。
 - ~~dev 模式丢 content 事件~~ 诊断更正:实为思考型模型吃光 max_tokens 配额致正文为空(已修:thinking 禁用 + 上限 8192);跑分脚本以 DB 终稿回写的做法保留(更稳)。
 - `next start` 与 `output: standalone` 有不兼容警告但实测可用;正式部署用 `node .next/standalone/server.js`。
+
+## 追加(2026-10-23 F8 境外随机点,方案定稿未实施)
+
+- **全球逆地理兜底**:F8 的 20% 全球随机点出了中国就没有中文名(研究靠地名驱动)。候选全数否决——天地图/高德/百度只覆盖中国;Google/Mapbox/HERE 付费+境外卡+服务器在国内不可达;Nominatim 免费实例限速 1qps+国内超时+返回英文名;自建 OSM 全量(几十 GB)对一个内测期每天几次的边缘路径太重。且荒野点上商业服务粒度也一样粗(「最近有人地几十公里外」),LLM 不吃亏。
+  - **定稿方案:地理编码降级链** 天地图(中国,POI 级)→ LLM 粗定位(DeepSeek,~¥0.001/次,输入 lat/lng 输出 JSON `{ocean, country_zh, region_zh, region_en, confidence}`):海洋点趣味拒绝+自动重抽;境外陆地 place_name=「国家·一级行政区」做区域史,中文资料薄自然走 scarce 降级(机制现成);意外红利:海外华人地点(旧金山/槟城/马六甲)中文史料极丰富。
+  - **落地清单**:`src/server/geocode/` 加 llm-fallback 适配器(复用 LlmProvider,TDD)→ `/api/geocode` 接链 → `pickRandomPlace` 加 20% 全球均匀随机(纬度 sin 分布保证面积均匀)→ 确认弹窗加「区域粗定位」标识 → 规划 prompt 注入境外区域提示(子问题可双语 query)。
+  - **升级路线**:随机探索变高频后,换离线 Natural Earth 国家+一级行政区边界(~100MB,point-in-polygon 毫秒级)+中文名映射表,零 API 成本替换 LLM 兜底,粒度相同。
