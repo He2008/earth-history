@@ -6,8 +6,11 @@
 ## 高优先(与成本/可信度直接相关)
 
 - **稀疏地点搜索成本**(2026-10-23 已大幅缓解):主力切 DeepSeek 搜索(¥0.005/次)后,退化 18 次也仅 ≈¥0.10,¥0.25 目标内。覆盖计数退化本身仍在(白跑轮次浪费延迟),M1 优化:重复命中计入当前子问题 + 缺口补查换 query;D3 跑分仍盯 `summary.csv` 的 yuan 列。
+  - 2026-10-23 已做(m1-backlog):覆盖计数改为每子问题 URL 集合(重复命中计入当前子问题,同 URL 同子问题不重复计),全覆盖后不再白跑复核轮,缺口补查逐轮换 query 措辞(`QUERY_VARIANTS`:历史资料/百科/概况/地方志)。集成测试:高度重叠结果 7 次搜索 → 2 次闭环。
 - **repo patch 键白名单**:updateTask/updateSource 的列名插值,加 5 行 `ALLOWED_PATCH_KEYS` 白名单(当前全内部字面量调用,无注入面)。
+  - 2026-10-23 已做(m1-backlog):`ALLOWED_TASK_PATCH_KEYS` / `ALLOWED_SOURCE_PATCH_KEYS` + `assertPatchKeys`,非法键即抛 `illegal patch key`。
 - **`quote`(被引单句)列从未填充**:schema 有列、TDD 承诺"存被引单句",M1 在引用校验后回写被引句(来源核查用)。
+  - 2026-10-23 已做(m1-backlog):`extractCitedSentence` 从校验后正文提取首个被引句(句子边界切分、≤200 字合规口径)随 cited 状态回写;`hasCitation` 编号精确匹配替换 `includes` 子串判定。
 
 ## 中优先
 
