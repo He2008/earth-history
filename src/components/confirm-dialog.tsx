@@ -6,9 +6,10 @@ import { seedPlaceDisplayName, type SeedPlace } from '@/lib/places';
 
 // F3.1 研究确认弹窗:方向预设 + 补充指令,确认后才启动(省成本 + 控制感)
 // place 兼容两种来源:种子池条目 / 地球点击后的逆地理结果(subtitle 传全地址)
-export function ConfirmDialog({ place, subtitle, onCancel, onConfirm }: {
+export function ConfirmDialog({ place, subtitle, coarse, onCancel, onConfirm }: {
   place: SeedPlace;
   subtitle?: string;
+  coarse?: boolean; // LLM 区域粗定位(境外):粒度为国家/一级行政区,预期管理
   onCancel: () => void;
   onConfirm: (direction: Direction, extra: string) => void;
 }) {
@@ -25,7 +26,10 @@ export function ConfirmDialog({ place, subtitle, onCancel, onConfirm }: {
     <div className="dialog-overlay" role="dialog" aria-modal="true" aria-label="确认研究">
       <div className="dialog">
         <h2 className="dialog-place" style={{ fontSize: 19 }}>{place.name}</h2>
-        <p className="dialog-admin">{subtitle ?? seedPlaceDisplayName(place).replace(place.name, '')} · {place.lat.toFixed(2)}, {place.lng.toFixed(2)}</p>
+        <p className="dialog-admin">
+          {subtitle ?? seedPlaceDisplayName(place).replace(place.name, '')} · {place.lat.toFixed(2)}, {place.lng.toFixed(2)}
+          {coarse && <span className="coarse-tag">区域粗定位</span>}
+        </p>
 
         <p className="dialog-label">研究方向</p>
         <div className="chip-grid">

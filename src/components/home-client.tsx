@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { Direction } from '@/lib/types';
 import type { SeedPlace } from '@/lib/places';
-import { placeInputOf, pickRandomPlace, seedPlaceDisplayName } from '@/lib/places';
+import { placeInputOf, pickExplore, randomLatLon, seedPlaceDisplayName } from '@/lib/places';
 import { streamResearch, type TaskDetail } from '@/lib/research-client';
 import type { ResearchFeedState } from '@/lib/sse';
 import { loadHistory, pushHistory, removeHistory, type HistoryEntry } from '@/lib/history';
@@ -16,7 +16,7 @@ import { ReportActions } from '@/components/report-actions';
 import { HistoryList } from '@/components/history-list';
 import { AiBadge } from '@/components/ai-badge';
 
-type Mode = { kind: 'pick' } | { kind: 'confirm'; place: SeedPlace; subtitle?: string } | { kind: 'research' };
+type Mode = { kind: 'pick' } | { kind: 'confirm'; place: SeedPlace; subtitle?: string; coarse?: boolean } | { kind: 'research' };
 
 export function HomeClient({ tdtKey }: { tdtKey: string }) {
   const [mode, setMode] = useState<Mode>({ kind: 'pick' });
@@ -33,28 +33,63 @@ export function HomeClient({ tdtKey }: { tdtKey: string }) {
     return () => abortRef.current?.abort();
   }, []);
 
-  // 地球点击 → 逆地理 → 确认弹窗(F2 + F3.1 主链路)
-  const pickOnGlobe = useCallback(async (lat: number, lng: number) => {
+  // 逆地理 → 确认弹窗(地球点击与全球随机共用);返回 land/ocean/error 供随机重抽
+  const geocodeToDialog = useCallback(async (lat: number, lng: number): Promise<'land' | 'ocean' | 'error'> => {
     setPickError(null);
-    setGeocoding(true);
     try {
       const resp = await fetch(`/api/geocode?lat=${lat.toFixed(5)}&lng=${lng.toFixed(5)}`);
       if (!resp.ok) {
         const j = await resp.json().catch(() => null);
-        throw new Error(j?.error?.message ?? '定位失败');
+        const msg: string = j?.error?.message ?? '定位失败';
+        if (msg.includes('海洋')) return 'ocean';
+        setPickError(msg);
+        return 'error';
       }
-      const r = await resp.json() as { place: { province: string; city: string | null; county: string }; formatted: string; poi: string | null };
+      const r = await resp.json() as { place: { province: string; city: string | null; county: string }; formatted: string; poi: string | null; source: 'tianditu' | 'llm-region' };
       setMode({
         kind: 'confirm',
         place: { name: r.poi ?? r.place.county, province: r.place.province, city: r.place.city, county: r.place.county, lat, lng },
         subtitle: r.formatted,
+        coarse: r.source === 'llm-region',
       });
+      return 'land';
     } catch (e) {
       setPickError((e as Error).message || '这里定不了位,换一个点试试');
+      return 'error';
+    }
+  }, []);
+
+  // 地球点击 → 逆地理 → 确认弹窗(F2 + F3.1 主链路)
+  const pickOnGlobe = useCallback(async (lat: number, lng: number) => {
+    setGeocoding(true);
+    try {
+      const r = await geocodeToDialog(lat, lng);
+      if (r === 'ocean') setPickError('这里是海洋——故事属于风与浪,点个陆地试试');
     } finally {
       setGeocoding(false);
     }
-  }, []);
+  }, [geocodeToDialog]);
+
+  // F8 随便看看:80% 种子池 / 20% 全球纯随机(落海自动重抽,至多 3 次)
+  const handleExplore = useCallback(async () => {
+    const pick = pickExplore();
+    if (pick.kind === 'pool') {
+      setMode({ kind: 'confirm', place: pick.place });
+      return;
+    }
+    setGeocoding(true);
+    try {
+      const spots = [pick, randomLatLon(), randomLatLon()];
+      for (const spot of spots) {
+        const r = await geocodeToDialog(spot.lat, spot.lng);
+        if (r === 'land') return;
+        if (r === 'error') return;
+      }
+      setPickError('连抽三次都是海,再试一次');
+    } finally {
+      setGeocoding(false);
+    }
+  }, [geocodeToDialog]);
 
   const startResearch = (place: SeedPlace, direction: Direction, extra: string) => {
     abortRef.current?.abort();
@@ -99,7 +134,7 @@ export function HomeClient({ tdtKey }: { tdtKey: string }) {
               </>
             ) : null}
             <p className="section-label">{tdtKey ? '或者从种子池选' : '选择地点'}</p>
-            <PlacePicker onSelect={(p) => setMode({ kind: 'confirm', place: p })} />
+            <PlacePicker onSelect={(p) => setMode({ kind: 'confirm', place: p })} onRandom={() => void handleExplore()} />
             <p className="section-label">最近研究</p>
             <HistoryList
               items={history}
@@ -147,6 +182,7 @@ export function HomeClient({ tdtKey }: { tdtKey: string }) {
         <ConfirmDialog
           place={mode.place}
           subtitle={mode.subtitle}
+          coarse={mode.coarse}
           onCancel={() => setMode({ kind: 'pick' })}
           onConfirm={(d, extra) => startResearch(mode.place, d, extra)}
         />

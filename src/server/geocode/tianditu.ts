@@ -7,7 +7,7 @@ export interface GeocodeResult {
   place: { province: string; city: string | null; county: string };
   formatted: string;
   poi: string | null;
-  source: 'tianditu';
+  source: 'tianditu' | 'llm-region';
 }
 
 export interface Geocoder {

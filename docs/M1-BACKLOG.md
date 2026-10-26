@@ -16,12 +16,16 @@
 ## 中优先
 
 - LLM usage/chain 结算边角:仅创建 LlmCall 不消费 stream 时 usage 永挂(理论);qwen.ts 文件名沿用但实为智谱 GLM,改名 glm.ts。
+  - 2026-10-26 已做(develop):`qwen.ts` → `glm.ts` 正名;usage 边角判定为理论性问题不修(全链路均消费 stream)。
 - SSE 契约对齐:`continue_polling` 事件未发(M0 无服务端主动断流,部署到反代后再启用);事件缺自增 `id:`;`search_hit.kept[]` 缺 idx。
+  - 2026-10-26 已做(develop):事件自增 `id:`、`search_hit.kept[]` 带跨轮累计候选序号;`continue_polling` 留待反代部署。
 - fetcher:`AbortSignal.any` 已修信号旁路,但 abort 与网络错误同归 reason:'error';robots 不支持 Allow 行/查询串规则;单域串行未实现(TDD §7 承诺)。
 - 首个 progress 事件在订阅前发出即丢失(订阅先于任务启动可修);scarce 相位抖动(scarce→synthesizing→scarce)。
-- ~~`>20% 无效引用` quality flag 只进 timeline,D3 盲评看不到~~;poll 响应缺 `scarcity` 字段;~~结构化 stdout 日志(TDD §12)未做~~。
+  - 2026-10-26 已做(develop):`startResearch` 增 onCreated 钩子(任务落库后、管线启动前订阅);scarce 降级成文相位持留 scarce,不再途经 synthesizing。
+- ~~`>20% 无效引用` quality flag 只进 timeline,D3 盲评看不到~~;~~poll 响应缺 `scarcity` 字段~~(2026-10-26 已补);~~结构化 stdout 日志(TDD §12)未做~~。
   - 2026-10-23 已做(D4,docs/LOGGING.md):结构化 stdout 日志全量落地(bus 白名单转发 + 12 埋点,含 `task.done.reportChars` 空报告探针、`fetch.start`(debug)卡死探针);quality flag 现同时进 timeline(`quality_flag: …`)与日志(`citations.invalid`);fetch 失败逐条 `fetch.fail` + `fetch.summary` + timeline 汇总;失败任务 catch 路径补 timeline `failed` 条目;生产验收 2095B/任务。
 - `startResearch` 无并发去重(同 key 并发会建两个任务);缓存过期行只判定不删除。
+  - 2026-10-26 已做(develop):inflight 同 key 去重(运行中并入同任务事件流,刚终态窗口按缓存回放,失败任务回放走 error 事件);cacheGet 过期即删行。
 
 ## 低优先(打磨)
 
@@ -46,3 +50,4 @@
   - **定稿方案:地理编码降级链** 天地图(中国,POI 级)→ LLM 粗定位(DeepSeek,~¥0.001/次,输入 lat/lng 输出 JSON `{ocean, country_zh, region_zh, region_en, confidence}`):海洋点趣味拒绝+自动重抽;境外陆地 place_name=「国家·一级行政区」做区域史,中文资料薄自然走 scarce 降级(机制现成);意外红利:海外华人地点(旧金山/槟城/马六甲)中文史料极丰富。
   - **落地清单**:`src/server/geocode/` 加 llm-fallback 适配器(复用 LlmProvider,TDD)→ `/api/geocode` 接链 → `pickRandomPlace` 加 20% 全球均匀随机(纬度 sin 分布保证面积均匀)→ 确认弹窗加「区域粗定位」标识 → 规划 prompt 注入境外区域提示(子问题可双语 query)。
   - **升级路线**:随机探索变高频后,换离线 Natural Earth 国家+一级行政区边界(~100MB,point-in-polygon 毫秒级)+中文名映射表,零 API 成本替换 LLM 兜底,粒度相同。
+  - **2026-10-26 已实施(develop)**:`src/server/geocode/llm-fallback.ts`(llmLocate,禁思考/200 token)+ runtime 降级链(天地图→LLM→海洋可读报错);`pickExplore` 80/20 分流 + `randomLatLon` 纬度 asin 面积均匀;前端落海自动重抽(≤3 次);确认弹窗「区域粗定位」标识;境外 POI 带英文名(`堪萨斯州(Kansas)`)天然提供双语检索词,prompts 未动。

@@ -1,10 +1,10 @@
 'use client';
 
 import { useState } from 'react';
-import { searchPlaces, pickRandomPlace, type SeedPlace } from '@/lib/places';
+import { searchPlaces, type SeedPlace } from '@/lib/places';
 
 // 选点(暂代 F1 地球:种子池检索 + 随便看看;天地图 Key 到位后换地球点击)
-export function PlacePicker({ onSelect }: { onSelect: (p: SeedPlace) => void }) {
+export function PlacePicker({ onSelect, onRandom }: { onSelect: (p: SeedPlace) => void; onRandom: () => void }) {
   const [q, setQ] = useState('');
   const trimmed = q.trim();
   const results = trimmed ? searchPlaces(trimmed) : [];
@@ -36,7 +36,7 @@ export function PlacePicker({ onSelect }: { onSelect: (p: SeedPlace) => void }) 
         )
       )}
       <div style={{ marginTop: 14 }}>
-        <button className="btn btn-primary" onClick={() => onSelect(pickRandomPlace())}>随便看看</button>
+        <button className="btn btn-primary" onClick={onRandom}>随便看看</button>
       </div>
     </div>
   );

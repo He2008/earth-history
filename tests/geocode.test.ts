@@ -1,7 +1,8 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
 import { createTiandituGeocoder } from '@/server/geocode/tianditu';
 import { GET } from '@/app/api/geocode/route';
-import { __setGeocodeForTests } from '@/server/geocode/runtime';
+import { __setGeocodeForTests, __setPartsForTests } from '@/server/geocode/runtime';
+import type { LlmProvider } from '@/server/providers/llm/types';
 
 const okBody = {
   result: {
@@ -10,7 +11,7 @@ const okBody = {
   },
 };
 
-afterEach(() => __setGeocodeForTests(null));
+afterEach(() => { __setGeocodeForTests(null); __setPartsForTests(null, null); });
 
 describe('天地图逆地理适配器', () => {
   it('成功:解析省/市/县与 POI,请求带浏览器 UA + Referer(浏览器端 key 准入条件)', async () => {
@@ -68,5 +69,35 @@ describe('GET /api/geocode', () => {
     const resp = await GET(new Request('http://x/api/geocode?lat=1&lng=1'));
     expect(resp.status).toBe(502);
     expect(await resp.json()).toMatchObject({ error: { code: 'geocode_failed' } });
+  });
+});
+
+describe('降级链(F8 境外兜底):天地图失败 → LLM 粗定位', () => {
+  const fakeRegionLlm = (json: string): LlmProvider => ({
+    name: 'deepseek',
+    chatStream: () => ({
+      usage: Promise.resolve({ promptTokens: 50, completionTokens: 30 }),
+      stream: (async function* () { yield { delta: json }; })(),
+    }),
+  });
+  it('境外陆地 → llm-region 载荷,POI 带英文名(双语检索词)', async () => {
+    __setPartsForTests(
+      { async geocode() { throw new Error('该点无政区信息(海域或境外)'); } },
+      fakeRegionLlm('{"ocean":false,"country":"美国","region":"堪萨斯州","region_en":"Kansas"}'),
+    );
+    const resp = await GET(new Request('http://x/api/geocode?lat=38.5&lng=-98.5'));
+    expect(resp.status).toBe(200);
+    expect(await resp.json()).toMatchObject({ place: { province: '美国', county: '堪萨斯州' }, poi: '堪萨斯州(Kansas)', source: 'llm-region' });
+  });
+  it('海洋 → 502 geocode_failed,消息可读', async () => {
+    __setPartsForTests(
+      { async geocode() { throw new Error('x'); } },
+      fakeRegionLlm('{"ocean":true,"country":null,"region":null,"region_en":null}'),
+    );
+    const resp = await GET(new Request('http://x/api/geocode?lat=0&lng=-140'));
+    expect(resp.status).toBe(502);
+    const j = await resp.json();
+    expect(j.error.code).toBe('geocode_failed');
+    expect(j.error.message).toContain('海洋');
   });
 });

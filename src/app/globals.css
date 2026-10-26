@@ -97,6 +97,11 @@ a:hover { text-decoration: underline; }
   padding: var(--dialog-padding);
   animation: dialog-in var(--duration-normal) var(--ease-standard);
 }
+.coarse-tag {
+  display: inline-block; margin-left: 8px; padding: 1px 8px;
+  border: var(--border-width-default) solid var(--border-strong); border-radius: 999px;
+  font-size: 11px; color: var(--text-tertiary); vertical-align: 1px;
+}
 .dialog-place { font-family: var(--font-display); font-size: var(--font-size-lg); font-weight: 700; margin: 0 0 2px; letter-spacing: -0.012em; }
 .dialog-admin { color: var(--text-tertiary); font-size: 13px; margin-bottom: 16px; }
 .dialog-label { font-size: var(--font-size-xs); letter-spacing: 0.2em; color: var(--text-tertiary); margin: 14px 0 8px; }

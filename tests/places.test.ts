@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { SEED_PLACES, searchPlaces, pickRandomPlace, placeInputOf, seedPlaceDisplayName } from '@/lib/places';
+import { SEED_PLACES, searchPlaces, pickRandomPlace, placeInputOf, seedPlaceDisplayName, randomLatLon, pickExplore } from '@/lib/places';
 
 describe('种子地点池(F8)', () => {
   it('规模 ≥ 100(PRD 种子池要求)', () => {
@@ -50,5 +50,38 @@ describe('pickRandomPlace / placeInputOf', () => {
     const input = placeInputOf(p);
     expect(input).toEqual({ province: '云南省', city: '大理州', county: '云龙县', village: '诺邓古村' });
     expect(seedPlaceDisplayName(p)).toBe('云南省大理州云龙县诺邓古村');
+  });
+});
+
+describe('F8 随机探索:全球均匀随机与 80/20 分流', () => {
+  it('randomLatLon 纬度按面积均匀(sin 分布),经度均匀,覆盖全球', () => {
+    const lats: number[] = [];
+    for (let i = 0; i < 2000; i++) {
+      const { lat, lng } = randomLatLon();
+      expect(lat).toBeGreaterThanOrEqual(-90);
+      expect(lat).toBeLessThanOrEqual(90);
+      expect(lng).toBeGreaterThanOrEqual(-180);
+      expect(lng).toBeLessThanOrEqual(180);
+      lats.push(lat);
+    }
+    const south = lats.filter((x) => x < 0).length / lats.length;
+    expect(south).toBeGreaterThan(0.4); // 均匀球面南半球应接近一半(赤道带权重高,>0.4 稳)
+    expect(Math.abs(Math.max(...lats))).toBeGreaterThan(60); // 能抽到高纬
+  });
+  it('pickExplore:约 80% 种子池 / 20% 全球随机', () => {
+    let global = 0;
+    const N = 1000;
+    for (let i = 0; i < N; i++) {
+      const pick = pickExplore();
+      if (pick.kind === 'global') {
+        global++;
+        expect(pick.lat).toBeDefined();
+        expect(pick.lng).toBeDefined();
+      } else {
+        expect(SEED_PLACES).toContain(pick.place);
+      }
+    }
+    expect(global / N).toBeGreaterThan(0.12);
+    expect(global / N).toBeLessThan(0.28);
   });
 });

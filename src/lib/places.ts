@@ -22,6 +22,20 @@ export function pickRandomPlace(): SeedPlace {
   return SEED_PLACES[Math.floor(Math.random() * SEED_PLACES.length)]!;
 }
 
+// F8 全球纯随机:纬度按球面面积均匀(asin 分布),不偏聚高纬;P8D「落到荒野也有故事」
+export function randomLatLon(): { lat: number; lng: number } {
+  const lat = Math.asin(2 * Math.random() - 1) * (180 / Math.PI);
+  const lng = Math.random() * 360 - 180;
+  return { lat: Number(lat.toFixed(3)), lng: Number(lng.toFixed(3)) };
+}
+
+export type ExplorePick = { kind: 'pool'; place: SeedPlace } | { kind: 'global'; lat: number; lng: number };
+
+// 随便看看分流:80% 种子池(资料有保障) / 20% 全球随机(惊喜感)
+export function pickExplore(): ExplorePick {
+  return Math.random() < 0.2 ? { kind: 'global', ...randomLatLon() } : { kind: 'pool', place: pickRandomPlace() };
+}
+
 // 池条目 → 研究输入的地点结构:名称作为最末一级(村/点)
 export function placeInputOf(p: SeedPlace): PlaceInput {
   return { province: p.province, city: p.city, county: p.county, village: p.name };
