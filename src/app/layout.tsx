@@ -3,7 +3,7 @@ import './tokens.css';
 import './globals.css';
 
 export const metadata: Metadata = {
-  title: '史地 · 点地问史',
+  title: '史地 PlaceLore · 点地问史',
   description: '在卫星地球上点一个地方,AI 检索中文史料,几分钟产出带引用的历史报告。',
 };
 

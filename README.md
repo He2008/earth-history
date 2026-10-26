@@ -1,6 +1,8 @@
-# 史地
+# 史地 PlaceLore
 
-3D 卫星地球 × AI 中文史料深度研究。当前:M0 编排器。文档见 `docs/`。
+> Every place has a lore. — an AI gazetteer of China
+
+3D 卫星地球 × AI 中文史料深度研究。文档见 `docs/`。
 
 ## 快速开始
 

@@ -84,7 +84,7 @@ export function HomeClient({ tdtKey }: { tdtKey: string }) {
     <div className="shell shell-wide">
       <header className="masthead">
         <h1 className="wordmark">史地</h1>
-        <span className="wordmark-sub">SHI · DI</span>
+        <span className="wordmark-sub">PLACE LORE</span>
       </header>
       <p className="tagline">在地球上点一个地方,问它的历史。AI 检索方志、档案与论文,几分钟产出带引用的报告。</p>
 
