@@ -125,7 +125,8 @@ export function HomeClient({ tdtKey }: { tdtKey: string }) {
                 <ReportView
                   reportMd={detail.reportMd}
                   scarcity={detail.scarcity}
-                  meta={{ placeName: detail.placeName, direction: detail.direction, createdAt: detail.createdAt, elapsedMs: detail.totalMs, yuan: detail.yuan }}
+                  meta={{ placeName: detail.placeName, direction: detail.direction, createdAt: detail.createdAt, elapsedMs: detail.totalMs }}
+                  metrics={detail.metrics}
                 />
                 <ReportActions taskId={detail.taskId} shareToken={detail.shareToken} />
                 <div className="report-actions">

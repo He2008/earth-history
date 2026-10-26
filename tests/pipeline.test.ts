@@ -96,6 +96,14 @@ describe('runTask', () => {
     await runTask('t12', deps({ llm: fakeLlm({ plan: '{"subQuestions":["q1","q2"]}', report: '正文[1]。\n' }) }));
     expect(repo.getTask('t12')!.report_md).toMatch(/## 来源\n1\. \[a\]\(https:\/\/a\/1\) ．a \[2024-01-01\]/);
   });
+  it('cost_json 携带节省指标(sourcesKept/charsRead/minutesSaved),yuan 留遥测', async () => {
+    repo.createTask({ ...TASK, id: 't13' });
+    await runTask('t13', deps({ llm: fakeLlm({ plan: '{"subQuestions":["q1","q2"]}', report: '正文[1]。\n' }) }));
+    const c = JSON.parse(repo.getTask('t13')!.cost_json!);
+    expect(c.yuan).toBeGreaterThan(0);
+    expect(c.metrics).toMatchObject({ sourcesKept: 3, charsRead: expect.any(Number) });
+    expect(c.metrics.minutesSaved).toBeGreaterThan(0);
+  });
   it('搜索全抛错 → failed / search_all_failed', async () => {
     repo.createTask({ ...TASK, id: 't4' });
     const d = deps({ search: { search: async () => { throw new Error('down'); } } });

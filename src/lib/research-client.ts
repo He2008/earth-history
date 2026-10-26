@@ -17,6 +17,7 @@ export interface TaskDetail {
   errorMsg: string | null;
   yuan: number | null;
   totalMs: number | null;
+  metrics: { sourcesKept: number; charsRead: number; minutesSaved: number } | null;
 }
 
 export async function fetchTaskDetail(taskId: string): Promise<TaskDetail | null> {
@@ -39,6 +40,7 @@ export async function fetchTaskDetail(taskId: string): Promise<TaskDetail | null
     errorMsg: t.error_msg ?? null,
     yuan: (() => { try { const c = JSON.parse(t.cost_json ?? 'null'); return c?.yuan ?? null; } catch { return null; } })(),
     totalMs: (() => { try { const ti = JSON.parse(t.timings_json ?? 'null'); return ti?.totalMs ?? null; } catch { return null; } })(),
+    metrics: (() => { try { const c = JSON.parse(t.cost_json ?? 'null'); return c?.metrics ?? null; } catch { return null; } })(),
   };
 }
 

@@ -11,6 +11,8 @@ export default async function SharePage({ params }: { params: Promise<{ token: s
   const { token } = await params;
   const t = getRepo().getTaskByShareToken(token);
   if (!t || !t.share_token) notFound();
+  let metrics = null;
+  try { metrics = JSON.parse(t.cost_json ?? 'null')?.metrics ?? null; } catch { /* 旧报告无指标 */ }
 
   return (
     <div className="shell shell-wide">
@@ -21,7 +23,7 @@ export default async function SharePage({ params }: { params: Promise<{ token: s
 
       <main id="main-content">
         <p className="section-label">{t.place_name} · {t.direction}</p>
-        <ReportView reportMd={t.report_md} scarcity={t.status === 'scarce'} meta={{ createdAt: t.created_at }} />
+        <ReportView reportMd={t.report_md} scarcity={t.status === 'scarce'} meta={{ createdAt: t.created_at }} metrics={metrics} />
       </main>
 
       <footer className="site-foot">

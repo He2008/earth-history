@@ -188,6 +188,14 @@ a:hover { text-decoration: underline; }
 .report .cite { color: var(--text-link); font-family: var(--font-mono); font-size: 0.72em; margin: 0 1px; cursor: default; }
 .report-actions { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; margin-top: var(--space-6); }
 .report-meta { color: var(--text-tertiary); font-size: var(--font-size-xs); font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
+.metrics-pills { display: flex; flex-wrap: wrap; gap: var(--space-2); margin: var(--space-4) 0 0; }
+.metrics-pills .pill {
+  display: inline-flex; align-items: center; padding: 4px 12px;
+  border: var(--border-width-default) solid var(--border-subtle); border-radius: 999px;
+  background: var(--bg-subtle); color: var(--text-secondary); font-size: var(--font-size-xs);
+  font-variant-numeric: tabular-nums; white-space: nowrap;
+}
+.metrics-pills .pill-accent { border-color: var(--border-accent); color: var(--text-primary); background: transparent; }
 .scarce-banner {
   display: flex; gap: 10px; align-items: baseline;
   border: var(--border-width-default) solid var(--status-warning); border-radius: var(--radius-control);

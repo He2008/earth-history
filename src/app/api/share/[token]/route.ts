@@ -7,6 +7,8 @@ export async function GET(_req: Request, ctx: { params: Promise<{ token: string 
   const t = repo.getTaskByShareToken(token);
   if (!t || !t.share_token) return Response.json({ error: { code: 'not_found', message: '链接无效' } }, { status: 404 });
   const sources = repo.listSources(t.id).filter((s) => s.stage === 'kept' || s.stage === 'cited' || s.stage === 'fetched');
+  let metrics = null;
+  try { metrics = JSON.parse(t.cost_json ?? 'null')?.metrics ?? null; } catch { /* 旧报告无指标 */ }
   return Response.json({
     place: JSON.parse(t.place_json),
     direction: t.direction,
@@ -14,6 +16,7 @@ export async function GET(_req: Request, ctx: { params: Promise<{ token: string 
     sources: sources.map((s) => ({ idx: s.idx, title: s.title, url: s.url, published_at: s.published_at })),
     created_at: t.created_at,
     scarcity: t.status === 'scarce',
+    metrics,
   });
 }
 

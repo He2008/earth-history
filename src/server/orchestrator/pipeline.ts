@@ -16,6 +16,7 @@ import type { Fetcher } from '@/server/providers/fetch/fetcher';
 import { createFetcher, RobotsGuard } from '@/server/providers/fetch/fetcher';
 import { planningMessages, synthesisMessages, scarceMessages, parsePlan } from '@/private/prompts';
 import { log } from '@/server/obs/log';
+import { estimateMinutesSaved, type ResearchMetrics } from '@/lib/metrics';
 import { buildSourcePack, validateCitations, sourceTitle, extractCitedSentence, hasCitation } from './citations';
 import { bus } from './events';
 import { registry, BUDGETS_MS } from './machine';
@@ -92,6 +93,8 @@ export async function runTask(taskId: string, deps: PipelineDeps, signal?: Abort
   const timings: Record<string, number> = {};
   const searchCalls: Record<string, number> = {};
   let tokIn = 0, tokOut = 0;
+  let charsRead = 0; // 人工等价阅读量:已抓正文全量 + 未抓来源以 snippet 计(节省指标口径)
+  let keptCount = 0; // catch 路径下闭包安全(planning 期失败时 keptList 尚未初始化)
 
   const cost = () => {
     let yuan = 0;
@@ -99,6 +102,11 @@ export async function runTask(taskId: string, deps: PipelineDeps, signal?: Abort
     yuan += tokIn * LLM_PRICES.deepseek.in + tokOut * LLM_PRICES.deepseek.out;
     return { searchCalls, llmTokens: { in: tokIn, out: tokOut }, yuan: Number(yuan.toFixed(4)) };
   };
+  const metrics = (reportChars: number): ResearchMetrics => ({
+    sourcesKept: keptCount,
+    charsRead,
+    minutesSaved: estimateMinutesSaved({ sourcesKept: keptCount, reportChars }),
+  });
 
   const emit = (event: string, data: unknown) => bus.emit(taskId, event, data);
   const phase = (status: string, note: string, round?: number) => {
@@ -106,8 +114,8 @@ export async function runTask(taskId: string, deps: PipelineDeps, signal?: Abort
     repo.appendTimeline(taskId, { phase: status, note, round, ts: Date.now() });
     emit('progress', { phase: status, round, note, ts: Date.now() });
   };
-  const finish = (status: 'completed' | 'scarce' | 'failed', extra: Record<string, unknown>) => {
-    repo.updateTask(taskId, { status, finished_at: Date.now(), ...extra, cost_json: JSON.stringify(cost()), timings_json: JSON.stringify({ ...timings, totalMs: Date.now() - t0 }) });
+  const finish = (status: 'completed' | 'scarce' | 'failed', extra: Record<string, unknown>, reportChars = 0) => {
+    repo.updateTask(taskId, { status, finished_at: Date.now(), ...extra, cost_json: JSON.stringify({ ...cost(), metrics: metrics(reportChars) }), timings_json: JSON.stringify({ ...timings, totalMs: Date.now() - t0 }) });
   };
 
   try {
@@ -173,6 +181,7 @@ export async function runTask(taskId: string, deps: PipelineDeps, signal?: Abort
       .sort((a, b) => b.score - a.score)
       .slice(0, cfg.REPORT_MAX_SOURCES)
       .map((x, i) => ({ ...x.hit, title: sourceTitle(x.hit), idx: i + 1, score: x.score }));
+    keptCount = keptList.length;
     repo.dropCandidates(taskId);
     const rowIdByUrlNorm = new Map<string, number>();
     for (const k of keptList) {
@@ -208,6 +217,7 @@ export async function runTask(taskId: string, deps: PipelineDeps, signal?: Abort
     if (keptList.length < cfg.SCARCITY_THRESHOLD) {
       // ---- scarce 降级 ----
       scarcity = true; finalStatus = 'scarce';
+      charsRead = keptList.reduce((a, s) => a + s.snippet.length, 0); // 稀缺降级只读摘要
       repo.updateTask(taskId, { status: 'scarce' });
       repo.appendTimeline(taskId, { phase: 'scarce', note: `资料稀缺(${keptList.length} 源),降级输出`, ts: Date.now() });
       emit('progress', { phase: 'scarce', note: `资料稀缺(${keptList.length} 源),降级输出`, ts: Date.now() });
@@ -220,6 +230,7 @@ export async function runTask(taskId: string, deps: PipelineDeps, signal?: Abort
       phase('fetching', `抓取前 ${Math.min(keptList.length, cfg.REPORT_MAX_SOURCES)} 个来源正文`);
       const pages: string[] = [];
       const failReasons: Record<string, number> = {};
+      const fetchedUrls = new Set<string>();
       const queue = [...keptList];
       const workers = Array.from({ length: Math.min(cfg.FETCH_CONCURRENCY, queue.length) }, async () => {
         while (queue.length && Date.now() - tf < BUDGETS_MS.fetchTotal) {
@@ -230,6 +241,8 @@ export async function runTask(taskId: string, deps: PipelineDeps, signal?: Abort
           if (page.ok) {
             pages.push(`[${s.idx}] ${page.title}\n${page.text.slice(0, 1500)}`);
             repo.updateSource(rowId, { stage: 'fetched', fetched_chars: page.chars });
+            fetchedUrls.add(s.urlNorm);
+            charsRead += page.chars;
           } else {
             const reason = page.reason ?? 'error';
             failReasons[reason] = (failReasons[reason] ?? 0) + 1;
@@ -238,6 +251,7 @@ export async function runTask(taskId: string, deps: PipelineDeps, signal?: Abort
         }
       });
       await Promise.all(workers);
+      for (const s of keptList) if (!fetchedUrls.has(s.urlNorm)) charsRead += s.snippet.length; // 未抓到正文的以摘要计
       timings.fetchingMs = Date.now() - tf;
       const failCount = Object.values(failReasons).reduce((a, b) => a + b, 0);
       log.info('fetch.summary', { taskId, ok: pages.length, fail: failCount, reasons: failReasons });
@@ -265,7 +279,7 @@ export async function runTask(taskId: string, deps: PipelineDeps, signal?: Abort
       if (rowId && hasCitation(finalMd, s.idx)) repo.updateSource(rowId, { stage: 'cited', quote: citedBody === null ? null : extractCitedSentence(citedBody, s.idx) });
     }
     emit('sources', { items: keptList.map((s) => ({ idx: s.idx, title: s.title, url: s.urlNorm, site: new URL(s.url).hostname, date: s.publishedAt ?? null })) });
-    finish(finalStatus, { share_token: nanoid(12) });
+    finish(finalStatus, { share_token: nanoid(12) }, finalMd.length);
     repo.cachePut(cacheKey(place.county, task.lat, task.lng, task.direction), taskId);
     emit('done', { taskId, status: finalStatus, elapsedMs: Date.now() - t0, sourcesKept: keptList.length, scarcity, yuan: cost().yuan, reportChars: finalMd.length });
   } catch (e) {
