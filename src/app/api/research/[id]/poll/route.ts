@@ -16,6 +16,7 @@ export async function GET(_req: Request, ctx: { params: Promise<{ id: string }> 
     timeline,
     sourcesKept: sources.length,
     partialChars: (t.report_md ?? '').length,
+    scarcity: t.status === 'scarce',
     done,
     continuePolling: !done,
     intervalMs: 3000,

@@ -83,6 +83,13 @@ describe('repo cache', () => {
     repo.cachePut('k2', 't1', -1);
     expect(repo.cacheGet('k2')).toBeUndefined();
   });
+  it('过期行在读时即删除(不留僵尸)', () => {
+    repo.createTask(task);
+    repo.cachePut('k3', 't1', -1);
+    repo.cacheGet('k3');
+    const n = (db.prepare('SELECT COUNT(*) c FROM research_cache WHERE cache_key=?').get('k3') as { c: number }).c;
+    expect(n).toBe(0);
+  });
 });
 
 describe('getRepo 生命周期(重启清扫)', () => {

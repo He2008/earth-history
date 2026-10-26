@@ -45,7 +45,7 @@ export function defaultDeps(): PipelineDeps {
     : [deepseek, bocha]; // 'deepseek'(默认)
   return {
     cfg,
-    llm: createLlmChain([createDeepSeek()]), // 单 DeepSeek;智谱 GLM 备用适配器保留(qwen.ts),需要时重新接线
+    llm: createLlmChain([createDeepSeek()]), // 单 DeepSeek;智谱 GLM 备用适配器保留(glm.ts),需要时重新接线
     search: createSearchChain(searchChain),
     fetcher: createFetcher(new RobotsGuard()),
     repo: getRepo(),
@@ -155,7 +155,8 @@ export async function runTask(taskId: string, deps: PipelineDeps, signal?: Abort
       const variant = QUERY_VARIANTS[(round - 1) % QUERY_VARIANTS.length];
       const queries = targets.map((i) => `${task.place_name} ${plan[i]}${variant}`);
       const results = await Promise.allSettled(queries.map((q) => deps.search.search(q, { count: 10, signal })));
-      const fresh: SearchHit[] = [];
+      const fresh: (SearchHit & { idx: number })[] = [];
+      let candidateIdx = kept.size; // 候选序号:跨轮累计,契约 §6 search_hit.kept[].idx
       results.forEach((r, qi) => {
         if (r.status !== 'fulfilled') return;
         anySearchOk = true;
@@ -164,13 +165,13 @@ export async function runTask(taskId: string, deps: PipelineDeps, signal?: Abort
           covered[targets[qi]].add(h.urlNorm);
           if (kept.has(h.urlNorm)) continue;
           kept.set(h.urlNorm, h);
-          fresh.push(h);
+          fresh.push({ ...h, idx: ++candidateIdx });
         }
       });
       for (const h of fresh) {
         repo.insertSource({ task_id: taskId, idx: null, stage: 'candidate', title: h.title, url: h.url, url_norm: h.urlNorm, snippet: h.snippet, published_at: h.publishedAt ?? null, engine: h.engine, score: null, fetched_chars: null, quote: null });
       }
-      emit('search_hit', { round, query: queries[0], engine: results[0]?.status === 'fulfilled' ? results[0].value.engine : null, found: fresh.length, kept: fresh.slice(0, 5).map((h) => ({ title: h.title, url: h.url, snippet: h.snippet })) });
+      emit('search_hit', { round, query: queries[0], engine: results[0]?.status === 'fulfilled' ? results[0].value.engine : null, found: fresh.length, kept: fresh.slice(0, 5).map((h) => ({ idx: h.idx, title: h.title, url: h.url, snippet: h.snippet })) });
       repo.appendTimeline(taskId, { phase: 'searching', note: `第 ${round} 轮检索,新增 ${fresh.length} 源`, round, ts: Date.now() });
     }
     timings.searchingMs = Date.now() - ts;
@@ -189,8 +190,8 @@ export async function runTask(taskId: string, deps: PipelineDeps, signal?: Abort
       rowIdByUrlNorm.set(k.urlNorm, rowId);
     }
 
-    const synthesize = async (msgs: ChatMsg[], budgetMs: number): Promise<string> => {
-      phase('synthesizing', '综合成文');
+    const synthesize = async (msgs: ChatMsg[], budgetMs: number, holdPhase?: string): Promise<string> => {
+      phase(holdPhase ?? 'synthesizing', holdPhase === 'scarce' ? '降级综合成文(资料稀缺)' : '综合成文');
       const tSyn = Date.now();
       // 思考型模型必须关思考,否则推理吃光配额导致正文为空;上限 8192 留足正文空间
       const call = deps.llm.chatStream({ messages: msgs, temperature: 0.5, maxTokens: 8192, thinking: 'disabled', signal: withBudget(signal, budgetMs) });
@@ -222,7 +223,7 @@ export async function runTask(taskId: string, deps: PipelineDeps, signal?: Abort
       repo.appendTimeline(taskId, { phase: 'scarce', note: `资料稀缺(${keptList.length} 源),降级输出`, ts: Date.now() });
       emit('progress', { phase: 'scarce', note: `资料稀缺(${keptList.length} 源),降级输出`, ts: Date.now() });
       const adminCtx = [place.province, place.city, place.county, place.village].filter(Boolean).join('');
-      const raw = await synthesize(scarceMessages(promptPlace, adminCtx, keptList.map((s) => s.snippet).join('\n')), BUDGETS_MS.scarce);
+      const raw = await synthesize(scarceMessages(promptPlace, adminCtx, keptList.map((s) => s.snippet).join('\n')), BUDGETS_MS.scarce, 'scarce'); // 相位持留 scarce,不再途经 synthesizing
       finalMd = `> ⚠️ 公开资料稀缺,以下为该地行政区划与地理背景,不含未经证实的细节。\n\n${raw.trim()}\n\n## 来源\n${keptList.map((s) => refLine(s)).join('\n')}\n`;
     } else {
       // ---- fetching ----
@@ -294,21 +295,31 @@ export async function runTask(taskId: string, deps: PipelineDeps, signal?: Abort
   }
 }
 
-export async function startResearch(input: ResearchInput): Promise<{ taskId: string; cached: boolean }> {
-  const deps = defaultDeps();
+const TERMINAL_STATUS = new Set(['completed', 'scarce', 'failed']);
+const inflightByKey = new Map<string, string>(); // 并发同 key 去重:运行中任务的 cacheKey → taskId
+
+export async function startResearch(input: ResearchInput, deps: PipelineDeps = defaultDeps(), onCreated?: (taskId: string) => void): Promise<{ taskId: string; cached: boolean }> {
   const key = cacheKey(input.place.county, input.lat, input.lng, input.direction);
   const hit = deps.repo.cacheGet(key);
   if (hit) {
     log.info('task.cache_hit', { taskId: hit.task_id, place: placeDisplayName(input.place), direction: input.direction });
     return { taskId: hit.task_id, cached: true };
   }
+  const running = inflightByKey.get(key); // 同 key 并发:并入运行中任务,不建第二个
+  if (running) {
+    const t = deps.repo.getTask(running);
+    if (t && !TERMINAL_STATUS.has(t.status)) return { taskId: running, cached: false };
+    return { taskId: running, cached: true }; // 刚终态、缓存尚未可见的窗口:按回放处理
+  }
   const id = nanoid(12);
   log.info('task.start', { taskId: id, place: placeDisplayName(input.place), direction: input.direction });
   deps.repo.createTask({ id, place_name: placeDisplayName(input.place), place_json: JSON.stringify(input.place), lat: input.lat, lng: input.lng, direction: input.direction, extra_instruction: input.extra });
+  inflightByKey.set(key, id); // 以下至 set 无 await,单线程内无竞态
+  onCreated?.(id); // 订阅窗口:任务已落库、管线未启动,SSE 首事件不丢
   const ac = registry.register(id);
   const hardTimer = setTimeout(() => registry.abort(id), BUDGETS_MS.taskHard); // 硬上限看门狗:abort → AbortError → catch 归为 timeout
   void runTask(id, deps, ac.signal)
     .catch(() => {}) // runTask 自身已兜底;此处防御性吞掉意外 rejection,finally 仍执行
-    .finally(() => { clearTimeout(hardTimer); registry.release(id); });
+    .finally(() => { clearTimeout(hardTimer); registry.release(id); inflightByKey.delete(key); });
   return { taskId: id, cached: false };
 }

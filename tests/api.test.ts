@@ -85,11 +85,13 @@ describe('POST /api/research', () => {
     expect(resp.status).toBe(400);
     expect(await resp.json()).toMatchObject({ error: { code: 'invalid_params' } });
   });
-  it('runner.start 抛错 → 500 internal 错误包络', async () => {
+  it('runner.start 抛错 → SSE 流内 error 事件(订阅先行重构后,错误统一走流)', async () => {
     setRunner({ async start() { throw new Error('boom'); } });
     const resp = await POST(new Request('http://x/api/research', { method: 'POST', body: JSON.stringify(body), headers: { 'content-type': 'application/json' } }));
-    expect(resp.status).toBe(500);
-    expect(await resp.json()).toMatchObject({ error: { code: 'internal', message: 'Error: boom' } });
+    expect(resp.headers.get('content-type')).toContain('text/event-stream');
+    const events = await readSseFull(resp);
+    expect(events.at(-1)!.event).toBe('error');
+    expect(events.at(-1)!.data).toMatchObject({ code: 'internal', message: 'Error: boom' });
   });
   it('正常创建 → SSE 依次 task_created/content/done,任务经 getRepo 落库', async () => {
     useFakeRunner();
@@ -100,6 +102,15 @@ describe('POST /api/research', () => {
     expect(events).toContain('content');
     expect(events[events.length - 1]).toBe('done');
     expect(getRepo().getTask('t_api')!.status).toBe('completed');
+  });
+  it('SSE 事件带自增 id: 调试用(TDD §6)', async () => {
+    useFakeRunner();
+    const resp = await POST(new Request('http://x/api/research', { method: 'POST', body: JSON.stringify(body), headers: { 'content-type': 'application/json' } }));
+    const text = await new Response(resp.body).text();
+    const ids = [...text.matchAll(/^id: (\d+)$/gm)].map((m) => Number(m[1]));
+    expect(ids.length).toBeGreaterThanOrEqual(3);
+    expect(ids).toEqual([...ids].sort((a, b) => a - b));
+    expect(new Set(ids).size).toBe(ids.length);
   });
   it('缓存命中 → SSE 快路径 task_created(cached:true)/content/sources/done,流正常关闭', async () => {
     setRunner({
@@ -168,6 +179,14 @@ describe('GET /api/research/:id/poll', () => {
     expect(rj.done).toBe(true);
     expect(rj.continuePolling).toBe(false);
     expect(rj.report).toBe('# 报告');
+  });
+  it('响应带 scarcity 字段(completed=false / scarce=true)', async () => {
+    seedRunningTask();
+    let j = await (await pollRoute(new Request('http://x'), { params: Promise.resolve({ id: 't_api' }) })).json();
+    expect(j.scarcity).toBe(false);
+    repo.updateTask('t_api', { status: 'scarce', report_md: '# 稀缺' });
+    j = await (await pollRoute(new Request('http://x'), { params: Promise.resolve({ id: 't_api' }) })).json();
+    expect(j.scarcity).toBe(true);
   });
   it('不存在 → 404 not_found', async () => {
     const resp = await pollRoute(new Request('http://x'), { params: Promise.resolve({ id: 'nope' }) });

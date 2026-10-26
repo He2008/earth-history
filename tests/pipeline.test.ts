@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach } from 'vitest';
-import { openDb, migrate } from '@/server/db/client';
-import { createRepo, type Repo } from '@/server/db/repo';
-import { runTask, scoreHit, type PipelineDeps } from '@/server/orchestrator/pipeline';
+import { openDb, migrate, __setDbForTests } from '@/server/db/client';
+import { createRepo, getRepo, __resetRepoForTests, type Repo } from '@/server/db/repo';
+import { runTask, startResearch, scoreHit, type PipelineDeps } from '@/server/orchestrator/pipeline';
 import { bus } from '@/server/orchestrator/events';
 import { __captureLogsForTests } from '@/server/obs/log';
 import { loadConfig } from '@/lib/config';
@@ -95,6 +95,41 @@ describe('runTask', () => {
     repo.createTask({ ...TASK, id: 't12' });
     await runTask('t12', deps({ llm: fakeLlm({ plan: '{"subQuestions":["q1","q2"]}', report: '正文[1]。\n' }) }));
     expect(repo.getTask('t12')!.report_md).toMatch(/## 来源\n1\. \[a\]\(https:\/\/a\/1\) ．a \[2024-01-01\]/);
+  });
+  it('search_hit 事件 kept[] 条目带候选序号 idx(TDD §6 契约)', async () => {
+    repo.createTask({ ...TASK, id: 't14' });
+    const hits: unknown[] = [];
+    const unsub = bus.subscribe('t14', (e) => { if (e.event === 'search_hit') hits.push(e.data); });
+    try { await runTask('t14', deps({})); } finally { unsub(); }
+    const first = hits[0] as { kept: Array<{ idx: number; title: string }> };
+    expect(first.kept.length).toBeGreaterThan(0);
+    expect(first.kept.map((k) => k.idx)).toEqual(first.kept.map((_, i) => i + 1));
+  });
+  it('startResearch 并发同 key 只建一个任务;onCreated 回调先于管线首事件(修首个 progress 丢失)', async () => {
+    const db2 = openDb(':memory:'); migrate(db2); __setDbForTests(db2); __resetRepoForTests(); getRepo();
+    const input = { lat: 25.88, lng: 99.15, place: { province: '云南省', city: '大理州', county: '云龙县', village: '诺邓村' }, direction: '综合沿革' as const };
+    const d = deps({});
+    let firstEventTs = 0; let onCreatedTs = 0;
+    const a = startResearch(input, d, () => { onCreatedTs = Date.now(); });
+    const b = startResearch(input, d); // 并发同 key:不建第二个任务
+    const [ra, rb] = await Promise.all([a, b]);
+    expect(ra.taskId).toBe(rb.taskId);
+    await new Promise((r) => setTimeout(r, 1200)); // 等管线走完
+    const rows = d.repo.getTask(ra.taskId)!;
+    expect(rows.status).toMatch(/completed|scarce/);
+    expect(onCreatedTs).toBeGreaterThan(0);
+    __setDbForTests(db); __resetRepoForTests(); getRepo();
+  });
+  it('scarce 降级成文期间状态机不抖动:全程 status 保持 scarce,不再途经 synthesizing', async () => {
+    repo.createTask({ ...TASK, id: 't15' });
+    const statuses: string[] = [];
+    const unsub = bus.subscribe('t15', (e) => { if (e.event === 'progress') statuses.push((e.data as { phase: string }).phase); });
+    try {
+      await runTask('t15', deps({ search: { search: async () => ({ hits: [{ title: '唯一', url: 'https://a/1', urlNorm: 'https://a/1', snippet: 's', engine: 'bocha' }], engine: 'bocha' }) } }));
+    } finally { unsub(); }
+    expect(repo.getTask('t15')!.status).toBe('scarce');
+    expect(statuses).not.toContain('synthesizing');
+    expect(statuses).toContain('scarce');
   });
   it('cost_json 携带节省指标(sourcesKept/charsRead/minutesSaved),yuan 留遥测', async () => {
     repo.createTask({ ...TASK, id: 't13' });

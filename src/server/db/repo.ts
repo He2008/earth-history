@@ -102,7 +102,9 @@ export function createRepo(db: Database.Database) {
   const cacheGet = (cache_key: string): { task_id: string; expires_at: number } | undefined => {
     const r = db.prepare('SELECT * FROM research_cache WHERE cache_key=?').get(cache_key) as { task_id: string; expires_at: number } | undefined;
     if (!r) return undefined;
-    return r.expires_at < now() ? undefined : r;
+    if (r.expires_at >= now()) return r;
+    db.prepare('DELETE FROM research_cache WHERE cache_key=? AND expires_at < ?').run(cache_key, now()); // 过期即删,不留僵尸行
+    return undefined;
   };
 
   const sweepStaleTasks = (maxAgeMs = 5 * 60_000): number =>
