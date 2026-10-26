@@ -91,6 +91,11 @@ describe('runTask', () => {
     expect(q2.quote).toBe('其余背景[2]。');
     expect(byStage.find((s) => s.idx === 3)!.stage).not.toBe('cited'); // 未被正文引用不标 cited
   });
+  it('来源列表带站点名与日期(百科参考资料格式)', async () => {
+    repo.createTask({ ...TASK, id: 't12' });
+    await runTask('t12', deps({ llm: fakeLlm({ plan: '{"subQuestions":["q1","q2"]}', report: '正文[1]。\n' }) }));
+    expect(repo.getTask('t12')!.report_md).toMatch(/## 来源\n1\. \[a\]\(https:\/\/a\/1\) ．a \[2024-01-01\]/);
+  });
   it('搜索全抛错 → failed / search_all_failed', async () => {
     repo.createTask({ ...TASK, id: 't4' });
     const d = deps({ search: { search: async () => { throw new Error('down'); } } });

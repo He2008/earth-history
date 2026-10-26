@@ -166,6 +166,25 @@ a:hover { text-decoration: underline; }
 }
 .report ol { padding-left: 0; margin: 0 0 14px; list-style: none; counter-reset: src; }
 .report ol li { padding: 6px 0; border-bottom: var(--border-width-default) solid var(--border-subtle); font-size: var(--font-size-sm); }
+.report ol li.ref-item { display: flex; align-items: flex-start; gap: 8px; padding: 8px 0; }
+.report .ref-index {
+  flex: none; min-width: 20px; height: 20px; padding: 0 4px; margin-top: 1px;
+  display: inline-flex; align-items: center; justify-content: center;
+  background: var(--bg-subtle); border-radius: var(--radius-sm);
+  font-family: var(--font-mono); font-size: 11px; color: var(--text-tertiary);
+  font-variant-numeric: tabular-nums;
+}
+.report .ref-main { flex: 1; min-width: 0; line-height: 1.9; } /* 内容回归内联流:长标题在链接内自然折行,不塌行 */
+.report a.ref-link { color: var(--text-link); }
+.report a.ref-link:hover { text-decoration: underline; }
+.report .ref-favicon { display: inline-block; width: 14px; height: 14px; vertical-align: -2px; margin-right: 5px; border-radius: 2px; }
+.report .ref-ext { display: inline-block; width: 0.7em; height: 0.7em; vertical-align: -0.05em; margin-left: 3px; color: var(--text-tertiary); }
+.report a.ref-link:hover .ref-ext { color: var(--text-link); }
+.report .ref-site { color: var(--text-tertiary); font-size: 12px; margin-left: 4px; }
+.report .ref-date { color: var(--text-tertiary); font-size: 12px; font-family: var(--font-mono); font-variant-numeric: tabular-nums; white-space: nowrap; margin-left: 4px; }
+.report a.ref-gotop { display: inline-flex; align-items: center; justify-content: center; width: 20px; height: 20px; margin-left: 6px; vertical-align: -4px; border-radius: var(--radius-sm); color: var(--text-tertiary); }
+.report a.ref-gotop:hover { color: var(--text-link); background: var(--bg-subtle); }
+.report .ref-gotop-icon { width: 11px; height: 11px; }
 .report .cite { color: var(--text-link); font-family: var(--font-mono); font-size: 0.72em; margin: 0 1px; cursor: default; }
 .report-actions { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; margin-top: var(--space-6); }
 .report-meta { color: var(--text-tertiary); font-size: var(--font-size-xs); font-family: var(--font-mono); font-variant-numeric: tabular-nums; }

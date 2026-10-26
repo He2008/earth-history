@@ -78,6 +78,14 @@ const QUERY_VARIANTS = ['', ' 历史资料', ' 百科', ' 概况', ' 地方志']
 const withBudget = (signal: AbortSignal | undefined, ms: number): AbortSignal =>
   AbortSignal.any([signal ?? new AbortController().signal, AbortSignal.timeout(ms)]);
 
+// 来源行(百科参考资料格式):`n. [标题](url) ．站点 [日期]`,渲染层据此出徽标/favicon/回跳
+const refLine = (s: { idx: number; title: string; urlNorm: string; publishedAt?: string | null }): string => {
+  let host = '';
+  try { host = new URL(s.urlNorm).hostname; } catch { host = ''; }
+  const date = /^\d{4}-\d{2}-\d{2}/.exec(s.publishedAt ?? '')?.[0]; // ISO 带时区尾巴,只取日期
+  return `${s.idx}. [${s.title}](${s.urlNorm})${host ? ` ．${host}` : ''}${date ? ` [${date}]` : ''}`;
+};
+
 export async function runTask(taskId: string, deps: PipelineDeps, signal?: AbortSignal): Promise<void> {
   const { repo, cfg } = deps;
   const t0 = Date.now();
@@ -205,7 +213,7 @@ export async function runTask(taskId: string, deps: PipelineDeps, signal?: Abort
       emit('progress', { phase: 'scarce', note: `资料稀缺(${keptList.length} 源),降级输出`, ts: Date.now() });
       const adminCtx = [place.province, place.city, place.county, place.village].filter(Boolean).join('');
       const raw = await synthesize(scarceMessages(promptPlace, adminCtx, keptList.map((s) => s.snippet).join('\n')), BUDGETS_MS.scarce);
-      finalMd = `> ⚠️ 公开资料稀缺,以下为该地行政区划与地理背景,不含未经证实的细节。\n\n${raw.trim()}\n\n## 来源\n${keptList.map((s) => `${s.idx}. [${s.title}](${s.urlNorm})`).join('\n')}\n`;
+      finalMd = `> ⚠️ 公开资料稀缺,以下为该地行政区划与地理背景,不含未经证实的细节。\n\n${raw.trim()}\n\n## 来源\n${keptList.map((s) => refLine(s)).join('\n')}\n`;
     } else {
       // ---- fetching ----
       const tf = Date.now();
@@ -247,7 +255,7 @@ export async function runTask(taskId: string, deps: PipelineDeps, signal?: Abort
         if (totalMarks > 0 && invalidCount / totalMarks > 0.2) repo.appendTimeline(taskId, { phase: 'synthesizing', note: `quality_flag: 无效引用占比 ${Math.round((invalidCount / totalMarks) * 100)}%`, ts: Date.now() });
       }
       finalStatus = 'completed';
-      finalMd = `${report.trim()}\n\n## 来源\n${keptList.map((s) => `${s.idx}. [${s.title}](${s.urlNorm})`).join('\n')}\n`;
+      finalMd = `${report.trim()}\n\n## 来源\n${keptList.map((s) => refLine(s)).join('\n')}\n`;
     }
 
     repo.updateTask(taskId, { report_md: finalMd });
