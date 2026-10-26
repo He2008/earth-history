@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import { fetchTaskDetail, pollRelay, type TaskDetail } from '@/lib/research-client';
@@ -18,14 +18,14 @@ export default function ResearchRestorePage() {
   const [detail, setDetail] = useState<TaskDetail | null>(null);
   const [feed, setFeed] = useState<ResearchFeedState | null>(null);
   const [missing, setMissing] = useState(false);
-  const started = useRef(false);
 
+  // 生命周期完全由 AbortController 管:卸载即中止轮询;不用 ref 防重入——
+  // React StrictMode(开发态)会 挂载→清理→再挂载,ref 守卫会让真正的那次挂载空转,恢复页变空白(2026-10-26 自测实锤)
   useEffect(() => {
-    if (started.current) return;
-    started.current = true;
     const ac = new AbortController();
     void (async () => {
       const d = await fetchTaskDetail(id);
+      if (ac.signal.aborted) return;
       if (!d) { setMissing(true); return; }
       setDetail(d);
       if (!TERMINAL.has(d.status)) {
