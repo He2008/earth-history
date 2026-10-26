@@ -1,9 +1,10 @@
 # 前期准备与文档清单
 
-> 配套 `PRD.md` 使用 · 状态:待执行
+> 配套 `PRD.md` 使用 · 状态:滚动更新(当前处于 M1 收尾,见下方日期批注)
 > 原则:**最小前置**——只办阻碍开工的事,文档随里程碑滚动补齐,不做纸面工程
 >
-> **2026-10-23 更新**:M0 编排器代码已实现并通过终审(分支 `m0-orchestrator`,15 文件 75 测试全绿,`next build` 通过;实施计划见 `docs/superpowers/plans/`;后续迭代已增至 16 文件 86 测试,以 `npm test` 为准)。**搜索/LLM 已切全 DeepSeek(2026 新 Search API,¥0.005/次)——一把 key 即可开工,key 已配置在 `.env`**。下一步:`npm run dev` + `npm run m0` 跑 D3 十地点盲评;博查/智谱为可选 A/B 对照。
+> **2026-10-23 更新**:M0 编排器代码已实现并通过终审(分支 `m0-orchestrator`,15 文件 75 测试全绿,`next build` 通过;实施计划见 `docs/superpowers/plans/`;后续迭代已增至 16 文件 86 测试,以 `npm test` 为准)。**搜索/LLM 已切全 DeepSeek(2026 新 Search API,¥0.005/次)——一把 key 即可开工,key 已配置在 `.env`**。
+> **2026-10-26 更新**:M1 进展——P0 界面链全部落地(F1 地球/F2 逆地理/F3.1 弹窗/SSE 面板/报告/恢复/分享/随机探索,分支 `m1-backlog`→`style-change`,200 测试全绿),D3 首轮十地点已跑(实测 ¥0.08-0.11/次)。下一步:盲评表模板+评分人(见 D3)、`style-change` 合并、部署验证。
 
 ---
 
@@ -14,8 +15,8 @@
 | 1.1 | 博查账号 + Web Search API Key | open.bochaai.com(微信扫码) | 0.5h | 预付费按量 ¥0.036/次(A-B 需要时再充值) | **可选**:搜索兜底(2026-10-23 主力切 DeepSeek 后不再阻碍) |
 | 1.1b | 智谱账号 + 搜索 API Key | open.bigmodel.cn | 0.5h | search_std ¥0.01/次、pro ¥0.03/次、sogou ¥0.05/次,新用户通常有赠送额度 | **可选**:三方 A-B 对照 |
 | 1.2 | DeepSeek 开放平台 + 充值 ¥50 | platform.deepseek.com | 0.5h | 按量(¥50 够 M0 全程,实测约 ¥0.10/次研究) | **唯一必需**(搜索+LLM 一把 key) |
-| 1.3 | 天地图开发者 Key(浏览器端 + 服务端各一个) | tianditu.gov.cn,**需个人实名** | 1h(审核可能 1 天) | 免费 | 阻碍 M1 地球模块;M0 编排器不需要,可并行 |
-| 1.4 | GitHub 仓库(开源骨架) | github.com | 0.5h | 免费 | M0 结束时要有 |
+| 1.3 | 天地图开发者 Key | tianditu.gov.cn,**需个人实名** | 1h(审核可能 1 天) | 免费 | ✅ 已办(2026-10-26):单把**浏览器端** key 同时跑通瓦片与逆地理——服务端调用带浏览器 UA+Referer 准入(见 `src/server/geocode/tianditu.ts`);将来建服务端 key 只换 `.env` 不改代码 |
+| 1.4 | GitHub 仓库(开源骨架) | github.com | 0.5h | 免费 | ✅ 已办:He2008/earth-history(`m1-backlog`/`style-change` 已推送) |
 | 1.5 | (P1 再办)百炼/智谱 vision Key、微信开放平台(登录/分享卡片) | — | — | — | 不阻碍当前 |
 
 **注意**:1.3 天地图浏览器端 Key 绑定域名白名单,`localhost` 可直接加,不影响内测;正式域名 M2 前再换。

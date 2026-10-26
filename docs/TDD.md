@@ -52,6 +52,8 @@ src/
 └─ lib/{types,config,cache-key}.ts
 ```
 
+> 增量(2026-10-26,M1 实际):`geocode/boundary` 未做(§9);新增 `server/geocode/runtime.ts`(单例+测试钩)、`app/api/{geocode,share/[token],research/[id]/feedback}`、`app/{research/[id],share/[token],not-found}` 三页面、`components/{home-client,place-picker,confirm-dialog,report-actions,ai-badge}.tsx`、`lib/{sse,md,history,places,research-client,url-norm}.ts`、`data/seed-places.json`(F8 种子池 108 处)。
+
 ## 3. 编排器状态机
 
 ```
@@ -222,6 +224,8 @@ run(task):
 - **scarce(F5)**:成功终态的变体,报告顶部渲染"资料稀缺"横幅,不编造
 
 ## 9. 逆地理编码(F2)
+
+> 实现(2026-10-26):主路已落地;实际使用**浏览器端** key(服务端调用带浏览器 UA+Referer 准入,单 key 复用),粒度实测到乡镇/POI;**兜底县界未做**——境内粒度已够,境外/海域兜底方案定稿待实施(M1-BACKLOG F8 条目)。
 
 1. **主路**:天地图逆地理 API(服务端 key)→ 省/市/县 + 最近 POI(候选村名)
 2. **兜底**(主路失败或粒度不到县):内置民政部行政区划县界 GeoJSON,point-in-polygon 查询 → 省/市/县(数据随仓库,MB 级)
