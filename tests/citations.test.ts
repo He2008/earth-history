@@ -78,6 +78,18 @@ describe('sourceTitle(PDF 残句标题兜底)', () => {
     const t = sourceTitle({ title: '<b>少城</b> - 少城', url: 'https://a.com/x', snippet: '' });
     expect(t).toBe('少城');
   });
+  it('卷期编号是垃圾(实测「第18卷 第2期」,下载端点无 .pdf 扩展也要识别为文档)', () => {
+    const t = sourceTitle({ title: '第18卷 第2期', url: 'http://xuebao.lsnu.edu.cn/system/_content/download.jsp?urltype=news.DownloadAttachUrl&owner=1&wbfileid=4532533', snippet: '民国时期(1912—1937)乐山城市近代化进程研究 * ... 摘 要:民国时期(1921—1937)年乐山城市近代化在晚清的基础上展开' });
+    expect(t).toBe('民国时期(1912—1937)乐山城市近代化进程研究');
+  });
+  it('掐头去尾的长残句是垃圾,snippet 剥 [n] 引用标记后取首子句(实测「侣们或出自名门望族…」)', () => {
+    const t = sourceTitle({ title: '侣们或出自名门望族，本身就具备经济资本、文化资本和社会资本的物质和精神资格和能力，当然是藏区社会的权力把持者；或僧侣们出', url: 'https://law.swust.edu.cn/_upload/article/files/e1/67/x/2a193913.pdf', snippet: '[15]不同教派的寺院和僧人与地方封建势力之间相互结合，互为依赖，上层僧人维持着特权' });
+    expect(t).toBe('不同教派的寺院和僧人与地方封建势力之间相互结合');
+  });
+  it('中等长度的信息型残句保留(实测「同年8月,张大千…写生、创作」28 字)', () => {
+    const t = sourceTitle({ title: '同年8月,张大千率领学生肖建初、翟道刚等10余人来山写生、创作', url: 'http://scdfz.sc.gov.cn/a/f.pdf', snippet: '同年10月1日援华抗日美军运输机一架,从印度起飞' });
+    expect(t).toBe('同年8月,张大千率领学生肖建初、翟道刚等10余人来山写生、创作');
+  });
 });
 
 describe('cleanTitle', () => {
@@ -92,5 +104,15 @@ describe('cleanTitle', () => {
   });
   it('正常标题原样保留(60 字内)', () => {
     expect(cleanTitle('京兆府-陕西省地方志办公室')).toBe('京兆府-陕西省地方志办公室');
+  });
+  it('剥离尾部面包屑/站点导航段(实测峨眉山任务:「- 当前位置：首页 > …」「| 欢迎来到…」)', () => {
+    expect(cleanTitle('乐山市切实加强和规范宗教活动场所文物保护工作 - 当前位置：首页 > 活动场所'))
+      .toBe('乐山市切实加强和规范宗教活动场所文物保护工作');
+    expect(cleanTitle('“灭绝师太”和乐山啥关系？-四川峨眉武术文化普及基地 - | 欢迎来到四川省峨眉武术文化普及基地'))
+      .toBe('“灭绝师太”和乐山啥关系？-四川峨眉武术文化普及基地');
+  });
+  it('站名在左文题在右的标题不误剥(实测「市政协 - 发言摘登」)', () => {
+    expect(cleanTitle('中国人民政治协商会议乐山市委员会 - 市政协八届常委会第二十次会议发言摘登'))
+      .toBe('中国人民政治协商会议乐山市委员会 - 市政协八届常委会第二十次会议发言摘登');
   });
 });

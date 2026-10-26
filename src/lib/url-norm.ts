@@ -1,8 +1,9 @@
-// URL 归一化:去重键的基础。百科系移动域/繁简变体/追踪参数都必须折叠成同一键,
-// 否则同一词条以 wap、PC、繁体三副面孔进来源列表(2026-10-23 浆洗街任务实测)。
+// URL 归一化:去重键的基础。百科系移动域/繁简变体/追踪参数/百分号编码大小写/词条 ID 段
+// 都必须折叠成同一键,否则同一词条以多副面孔进来源列表(浆洗街、峨眉山两任务实测迭代)。
 const TRACKING_PARAMS = new Set([
   'utm_source', 'utm_medium', 'utm_campaign', 'utm_term', 'utm_content',
   'spm', 'from', 'share_token', 'scene', 'bst', 'svcp_stk', 'chksm', 'fr', 'srcid',
+  'frommodule', 'lemmafrom', 'lemmaidfrom', 'structureid', 'structureclickid', 'structureitemid',
 ]);
 
 export function normalizeUrl(raw: string): string {
@@ -19,6 +20,11 @@ export function normalizeUrl(raw: string): string {
     for (const k of [...u.searchParams.keys()]) {
       if (TRACKING_PARAMS.has(k.toLowerCase())) u.searchParams.delete(k);
     }
+    // 百科词条路径折叠:/item/名/4278752 → /item/名(带 ID 与不带 ID、各处入口是同一词条)
+    if (u.hostname === 'baike.baidu.com') u.pathname = u.pathname.replace(/^(\/item\/[^/]+)\/\d+/, '$1');
+    // 百分号编码统一大写(%e5 与 %E5 是同一路径,不同引擎编码习惯不同)
+    u.pathname = u.pathname.replace(/%[0-9a-f]{2}/gi, (m) => m.toUpperCase());
+    if (u.search) u.search = u.search.replace(/%[0-9a-f]{2}/gi, (m) => m.toUpperCase());
     if (u.pathname.length > 1 && u.pathname.endsWith('/')) u.pathname = u.pathname.slice(0, -1);
     return u.toString();
   } catch {
