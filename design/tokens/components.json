@@ -1,0 +1,56 @@
+{
+  "$description": "Component-specific tokens. Prefer aliases to semantic tokens; avoid direct primitive references.",
+  "button": {
+    "primary": {
+      "background": "{color.action.primary}",
+      "foreground": "{color.action.primary-text}",
+      "hover": "{color.action.primary-hover}",
+      "active": "{color.action.primary-active}"
+    },
+    "secondary": {
+      "background": "{color.action.secondary}",
+      "foreground": "{color.action.secondary-text}"
+    },
+    "focus-ring": "{color.focus.ring}"
+  },
+  "panel": {
+    "background": "{color.bg.surface}",
+    "border": "{color.border.default}",
+    "radius": "{radius.md}",
+    "padding": "{space.5}",
+    "shadow": "{shadow.panel}"
+  },
+  "input": {
+    "background": "{color.bg.elevated}",
+    "foreground": "{color.text.primary}",
+    "placeholder": "{color.text.tertiary}",
+    "border": "{color.border.default}",
+    "focus-ring": "{color.focus.ring}",
+    "radius": "{radius.sm}",
+    "height": "{size.control-md}"
+  },
+  "table": {
+    "header-background": "{color.bg.subtle}",
+    "row-background": "{color.bg.surface}",
+    "row-hover": "{color.bg.subtle}",
+    "row-selected": "{color.border.accent}",
+    "divider": "{color.border.subtle}"
+  },
+  "badge": {
+    "success-background": "{color.status.success-bg}",
+    "success-foreground": "{color.status.success}",
+    "warning-background": "{color.status.warning-bg}",
+    "warning-foreground": "{color.status.warning}",
+    "danger-background": "{color.status.danger-bg}",
+    "danger-foreground": "{color.status.danger}",
+    "info-background": "{color.status.info-bg}",
+    "info-foreground": "{color.status.info}"
+  },
+  "dialog": {
+    "background": "{color.bg.elevated}",
+    "border": "{color.border.accent}",
+    "radius": "{radius.lg}",
+    "shadow": "{shadow.modal}",
+    "padding": "{space.6}"
+  }
+}

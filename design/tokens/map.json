@@ -1,0 +1,30 @@
+{
+  "$description": "Data visualization tokens for map layers. Map state colors are separate from UI status colors.",
+  "map": {
+    "territory": {
+      "default": "#B9A47B",
+      "friendly": "#78916B",
+      "allied": "#7698B5",
+      "neutral": "#C8BA9A",
+      "rival": "#A85B50",
+      "occupied": "#8E6655",
+      "unexplored": "#D8D0BF",
+      "selected-outline": "#C6A15B",
+      "border": "#F0E5CC"
+    },
+    "route": {
+      "trade": "#C6A15B",
+      "diplomatic": "#7698B5",
+      "military": "#A85B50"
+    },
+    "label": {
+      "primary": "#382C22",
+      "secondary": "#786A55",
+      "inverse": "#FBF6EB"
+    },
+    "overlay": {
+      "hover": "#C6A15B40",
+      "selection": "#C6A15B66"
+    }
+  }
+}

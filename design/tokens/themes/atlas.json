@@ -1,0 +1,84 @@
+{
+  "$description": "Atlas / parchment light theme",
+  "color": {
+    "bg": {
+      "canvas": "#D9CBAA",
+      "surface": "#F0E5CC",
+      "elevated": "#FBF6EB",
+      "subtle": "#E8DCC0",
+      "navigation": "#243748",
+      "inverse": "#243748"
+    },
+    "text": {
+      "primary": "#382C22",
+      "secondary": "{color.palette.ink.400}",
+      "tertiary": "{color.palette.ink.350}",
+      "inverse": "#FBF6EB",
+      "link": "#365A78"
+    },
+    "border": {
+      "default": "#B8A47C",
+      "subtle": "#D9CBAA",
+      "strong": "#978260",
+      "accent": "#C6A15B",
+      "focus": "#365A78"
+    },
+    "action": {
+      "primary": "#772F35",
+      "primary-hover": "#60242A",
+      "primary-active": "#501D24",
+      "primary-text": "#FFFFFF",
+      "secondary": "#243748",
+      "secondary-text": "#FBF6EB"
+    },
+    "status": {
+      "success": "#354832",
+      "success-bg": "#E8EEE4",
+      "warning": "#6B4518",
+      "warning-bg": "#F7EEDC",
+      "danger": "#8D302A",
+      "danger-bg": "#F5E7E5",
+      "info": "#365A78",
+      "info-bg": "#E6EDF1"
+    },
+    "focus": {
+      "ring": "#365A78"
+    }
+  },
+  "component": {
+    "button": {
+      "height-sm": "28px",
+      "height-md": "36px",
+      "height-lg": "44px",
+      "radius": "3px",
+      "padding-x": "16px"
+    },
+    "panel": {
+      "background": "{color.bg.surface}",
+      "border": "{color.border.default}",
+      "radius": "6px",
+      "padding": "20px"
+    },
+    "input": {
+      "background": "{color.bg.elevated}",
+      "text": "{color.text.primary}",
+      "placeholder": "{color.text.tertiary}",
+      "border": "{color.border.default}",
+      "focus": "{color.border.focus}",
+      "radius": "3px",
+      "height": "36px"
+    },
+    "table": {
+      "header-bg": "{color.bg.subtle}",
+      "row-bg": "{color.bg.surface}",
+      "row-hover": "#E8DCC0",
+      "row-selected": "#E7D09A",
+      "divider": "{color.border.subtle}"
+    },
+    "badge": {
+      "radius": "3px",
+      "padding-x": "8px",
+      "padding-y": "4px"
+    }
+  }
+}

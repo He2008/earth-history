@@ -1,0 +1,30 @@
+{
+  "name": "shidi",
+  "private": true,
+  "version": "0.1.0",
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "test": "vitest run",
+    "tokens": "tsx scripts/build-tokens.ts",
+    "m0": "tsx scripts/run-m0.ts"
+  },
+  "dependencies": {
+    "better-sqlite3": "^13.0.3",
+    "maplibre-gl": "^6.15.0",
+    "nanoid": "^5.0.7",
+    "next": "^15.0.0",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0",
+    "zod": "^3.23.8"
+  },
+  "devDependencies": {
+    "@types/better-sqlite3": "^7.6.11",
+    "@types/node": "^22.9.0",
+    "@types/react": "^19.0.0",
+    "tsx": "^4.19.0",
+    "typescript": "^5.6.0",
+    "vitest": "^2.1.0"
+  }
+}

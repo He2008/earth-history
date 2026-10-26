@@ -1,0 +1,12 @@
+[
+  { "name": "西安", "slug": "xian", "lat": 34.26, "lng": 108.94, "place": { "province": "陕西省", "city": "西安市", "county": "西安市" }, "direction": "综合沿革" },
+  { "name": "敦煌", "slug": "dunhuang", "lat": 40.14, "lng": 94.66, "place": { "province": "甘肃省", "city": "酒泉市", "county": "敦煌市" }, "direction": "综合沿革" },
+  { "name": "平遥古城", "slug": "pingyao", "lat": 37.20, "lng": 112.18, "place": { "province": "山西省", "city": "晋中市", "county": "平遥县" }, "direction": "古建筑文物" },
+  { "name": "诺邓村", "slug": "nuodeng", "lat": 25.88, "lng": 99.15, "place": { "province": "云南省", "city": "大理州", "county": "云龙县", "village": "诺邓村" }, "direction": "综合沿革" },
+  { "name": "碛口镇", "slug": "qikou", "lat": 37.66, "lng": 110.72, "place": { "province": "山西省", "city": "吕梁市", "county": "临县", "village": "碛口镇" }, "direction": "经济商贸" },
+  { "name": "呈坎村", "slug": "chengkan", "lat": 29.92, "lng": 118.01, "place": { "province": "安徽省", "city": "黄山市", "county": "徽州区", "village": "呈坎村" }, "direction": "古建筑文物" },
+  { "name": "上甘棠村", "slug": "shanggantang", "lat": 25.06, "lng": 111.34, "place": { "province": "湖南省", "city": "永州市", "county": "江永县", "village": "上甘棠村" }, "direction": "综合沿革" },
+  { "name": "独克宗古城", "slug": "dukeong", "lat": 27.83, "lng": 99.70, "place": { "province": "云南省", "city": "迪庆州", "county": "香格里拉市", "village": "独克宗古城" }, "direction": "民族风俗" },
+  { "name": "埭美古村", "slug": "daimei", "lat": 24.43, "lng": 117.85, "place": { "province": "福建省", "city": "漳州市", "county": "龙海区", "village": "埭美村" }, "direction": "古建筑文物" },
+  { "name": "川西无名谷地", "slug": "wildcard", "lat": 31.12, "lng": 102.73, "place": { "province": "四川省", "city": "阿坝州", "county": "马尔康市" }, "direction": "综合沿革" }
+]

@@ -1,0 +1,84 @@
+{
+  "$description": "Court / midnight dark theme",
+  "color": {
+    "bg": {
+      "canvas": "#18242E",
+      "surface": "#243748",
+      "elevated": "#304454",
+      "subtle": "#354B5B",
+      "navigation": "#121B23",
+      "inverse": "#F0E5CC"
+    },
+    "text": {
+      "primary": "#F0E5CC",
+      "secondary": "#C0D0DC",
+      "tertiary": "{color.palette.navy.150}",
+      "inverse": "#18242E",
+      "link": "#A9CBE4"
+    },
+    "border": {
+      "default": "#526575",
+      "subtle": "#354B5B",
+      "strong": "#8198AA",
+      "accent": "#C6A15B",
+      "focus": "#A9CBE4"
+    },
+    "action": {
+      "primary": "#C6A15B",
+      "primary-hover": "#E7D09A",
+      "primary-active": "#A9823E",
+      "primary-text": "#18242E",
+      "secondary": "#526D82",
+      "secondary-text": "#FFFFFF"
+    },
+    "status": {
+      "success": "#C5D3BB",
+      "success-bg": "#354832",
+      "warning": "#E7BD73",
+      "warning-bg": "#58421F",
+      "danger": "#E4C3BF",
+      "danger-bg": "#501D24",
+      "info": "#C0D0DC",
+      "info-bg": "#243748"
+    },
+    "focus": {
+      "ring": "#A9CBE4"
+    }
+  },
+  "component": {
+    "button": {
+      "height-sm": "28px",
+      "height-md": "36px",
+      "height-lg": "44px",
+      "radius": "3px",
+      "padding-x": "16px"
+    },
+    "panel": {
+      "background": "{color.bg.surface}",
+      "border": "{color.border.default}",
+      "radius": "6px",
+      "padding": "20px"
+    },
+    "input": {
+      "background": "{color.bg.elevated}",
+      "text": "{color.text.primary}",
+      "placeholder": "{color.text.tertiary}",
+      "border": "{color.border.default}",
+      "focus": "{color.border.focus}",
+      "radius": "3px",
+      "height": "36px"
+    },
+    "table": {
+      "header-bg": "{color.bg.elevated}",
+      "row-bg": "{color.bg.surface}",
+      "row-hover": "#354B5B",
+      "row-selected": "#58421F",
+      "divider": "{color.border.subtle}"
+    },
+    "badge": {
+      "radius": "3px",
+      "padding-x": "8px",
+      "padding-y": "4px"
+    }
+  }
+}
