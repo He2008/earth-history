@@ -17,7 +17,7 @@ set -euo pipefail
 # 默认值取自本机 ~/.ssh/config 的 VPS 条目(HostName/User/Port);IdentityFile 为默认 id_rsa,ssh 自动使用
 HOST="${1:-admin@118.195.142.150}"
 if [ -n "${1:-}" ] && [[ "$1" != --* ]]; then shift; fi
-SSH_PORT=2222 DEPLOY_DIR=/opt/placelore APP_PORT=3000
+SSH_PORT=2222 DEPLOY_DIR=/home/admin/earth-history APP_PORT=13000
 while [ $# -gt 0 ]; do
   case "$1" in
     --ssh-port) SSH_PORT="$2"; shift 2 ;;
@@ -41,14 +41,36 @@ step "前置检查"
 command -v rsync >/dev/null || die "本地缺 rsync"
 $SSH true 2>/dev/null || die "SSH 连不上 $HOST(:$SSH_PORT)"
 REMOTE_NODE=$($SSH 'command -v node >/dev/null 2>&1 && node -v || echo NO_NODE')
-[ "$REMOTE_NODE" = "NO_NODE" ] && die "服务器没装 Node(需 ≥20):建议 fnm/nvm 安装后重试"
-ok "SSH 通 / 远端 Node $REMOTE_NODE"
+[ "$REMOTE_NODE" = "NO_NODE" ] && die "服务器没装 Node(需 ≥20.6,--env-file 启动需要):建议 fnm/nvm 安装后重试"
+# 选运行时 Node:系统 node ≥20.6 直接用;否则找 fnm/nvm 里最新且 ≥20.6 的(非交互 SSH PATH 里没有 fnm)
+NODE_BIN=$($SSH '
+best=""; best_v=""
+for p in "$HOME"/.local/share/fnm/node-versions/*/installation/bin/node \
+         "$HOME"/.nvm/versions/node/*/bin/node \
+         "$(command -v node 2>/dev/null)"; do
+  [ -x "$p" ] || continue
+  v=$("$p" -p process.versions.node 2>/dev/null) || continue
+  case "$v" in
+    2[1-9].*) ;;
+    20.*) minor=${v#*.}; minor=${minor%%.*}; [ "$minor" -ge 6 ] || continue ;;
+    *) continue ;;
+  esac
+  if [ -z "$best" ] || [ "$(printf "%s\n%s" "$v" "$best_v" | sort -V | tail -n1)" = "$v" ]; then
+    best="$p"; best_v="$v"
+  fi
+done
+echo "${best:-}"
+')
+[ -n "$NODE_BIN" ] || die "远端没有 Node ≥20.6(启动用 --env-file 需要),请先在服务器安装(fnm/nvm)"
+ok "SSH 通 / 远端运行时 Node $($SSH "'$NODE_BIN' -v")($NODE_BIN)"
 
 # ---------- 1. 同步源码(保留服务器 data/ 与 prod.env) ----------
 step "rsync 源码 → $HOST:$SRC_DIR"
 $SSH "mkdir -p '$DEPLOY_DIR/data'"
+# 清理旧部署布局残留在部署根目录的 lockfile,避免 Next 误判 workspace 根(standalone 嵌套)
+$SSH "rm -f '$DEPLOY_DIR/package-lock.json'"
 rsync -az --delete -e "$RSYNC_SSH" \
-  --exclude node_modules --exclude .next --exclude data \
+  --exclude node_modules --exclude .next --exclude '/data/' \
   --exclude '.env*' --exclude '*.log' --exclude .DS_Store \
   ./ "$HOST:$SRC_DIR/"
 ok "源码同步完成(data/ 与密钥不受影响)"
@@ -59,15 +81,17 @@ cat .env | $SSH "cat > '$DEPLOY_DIR/.env.upload'"
 $SSH "cd '$DEPLOY_DIR' && { cat .env.upload; echo \"DB_PATH=$DEPLOY_DIR/data/shidi.db\"; echo 'NODE_ENV=production'; } > prod.env && chmod 600 prod.env .env.upload && rm .env.upload"
 ok "prod.env 就绪(DB_PATH=$DEPLOY_DIR/data/shidi.db)"
 
-# ---------- 3. 服务器构建(在目标平台编译原生模块) ----------
+# ---------- 3. 服务器构建(在目标平台编译原生模块;构建/运行用同一 Node,PATH 前置其 bin) ----------
 step "远端 npm ci + build(首次约 2-4 分钟)"
-$SSH "cd '$SRC_DIR' && ( [ -d node_modules ] || npm ci --silent ) && npm run build --silent && cp -r .next/static .next/standalone/.next/static && ( [ -d public ] && cp -r public .next/standalone/public || true )"
+NODE_VER=$($SSH "'$NODE_BIN' -v")
+$SSH "cd '$SRC_DIR' && export PATH='$(dirname "$NODE_BIN")':\$PATH && \
+  { [ -d node_modules ] && [ \"\$(cat '$DEPLOY_DIR/.node-stamp' 2>/dev/null)\" = '$NODE_VER' ] || { npm ci --silent && echo '$NODE_VER' > '$DEPLOY_DIR/.node-stamp'; }; } && \
+  npm run build --silent && mkdir -p .next/standalone/.next && cp -r .next/static .next/standalone/.next/static && { [ -d public ] && cp -r public .next/standalone/public || true; }"
 ok "构建完成"
 
 # ---------- 4. 常驻服务(systemd,无 sudo 退化为 nohup) ----------
 step "启动/重启服务(端口 $APP_PORT)"
 if $SSH 'sudo -n true 2>/dev/null'; then
-  NODE_BIN=$($SSH 'command -v node')
   $SSH "sudo tee /etc/systemd/system/placelore.service >/dev/null <<EOF
 [Unit]
 Description=PlaceLore (shi-di history research)
@@ -87,7 +111,7 @@ EOF
 sudo systemctl daemon-reload && sudo systemctl enable --now placelore >/dev/null 2>&1; sudo systemctl restart placelore"
   ok "systemd 服务 placelore 已重启(开机自启)"
 else
-  $SSH "cd '$DEPLOY_DIR' && kill \$(cat run.pid 2>/dev/null) 2>/dev/null || true; cd '$SRC_DIR' && (setsid env PORT=$APP_PORT HOSTNAME=0.0.0.0 node --env-file='$DEPLOY_DIR/prod.env' .next/standalone/server.js >> '$DEPLOY_DIR/run.log' 2>&1 & echo \$! > '$DEPLOY_DIR/run.pid')"
+  $SSH "cd '$DEPLOY_DIR' && kill \$(cat run.pid 2>/dev/null) 2>/dev/null || true; cd '$SRC_DIR' && (setsid env PORT=$APP_PORT HOSTNAME=0.0.0.0 '$NODE_BIN' --env-file='$DEPLOY_DIR/prod.env' .next/standalone/server.js >> '$DEPLOY_DIR/run.log' 2>&1 & echo \$! > '$DEPLOY_DIR/run.pid')"
   ok "nohup 常驻已重启(pid 见 $DEPLOY_DIR/run.pid,日志 run.log)"
 fi
 

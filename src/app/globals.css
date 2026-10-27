@@ -133,7 +133,7 @@ a:hover { text-decoration: underline; }
 .tele-log {
   font-family: var(--font-mono); font-variant-numeric: tabular-nums;
   font-size: 13px; line-height: 1.9; color: var(--text-secondary);
-  max-height: 300px; overflow: auto; overscroll-behavior: contain;
+  max-height: 300px; overflow: auto; overscroll-behavior: contain; scrollbar-width: none;
   display: flex; flex-direction: column; margin: 0;
 }
 .tele-row { display: flex; gap: 10px; animation: tele-in 140ms var(--ease-standard); }
@@ -146,8 +146,18 @@ a:hover { text-decoration: underline; }
 .stream-preview {
   margin-top: 12px; padding: 12px 14px; border: var(--border-width-default) solid var(--border-subtle); border-radius: var(--radius-control);
   font-family: var(--font-display); font-size: var(--font-size-sm); line-height: 1.9; color: var(--text-secondary);
-  max-height: 260px; overflow: auto; white-space: pre-wrap; word-break: break-word;
+  /* 预览是打字机舞台:粘底跟随下滚动条无信息量,每帧 snap 只会让叠加滚动条不停弹出淡出,直接隐藏 */
+  max-height: 260px; overflow: auto; scrollbar-width: none; white-space: pre-wrap; word-break: break-word;
+  transition: max-height var(--duration-slow) var(--ease-standard), margin-top var(--duration-slow) var(--ease-standard),
+    padding var(--duration-slow) var(--ease-standard), border-width var(--duration-slow) var(--ease-standard),
+    opacity var(--duration-fast) var(--ease-standard), transform var(--duration-fast) var(--ease-standard);
 }
+.stream-preview.is-exit {
+  max-height: 0; margin-top: 0; padding-top: 0; padding-bottom: 0; border-width: 0;
+  opacity: 0; transform: translateY(-6px); overflow: hidden; pointer-events: none;
+}
+/* 遥测/预览同治理:自动跟随的流式容器里滚动条出现/消失只会闪现,统一隐藏;滚轮触屏照常可滚 */
+.tele-log::-webkit-scrollbar, .stream-preview::-webkit-scrollbar { display: none; }
 .caret { display: inline-block; width: 0.6em; color: var(--border-accent); animation: blink 0.9s steps(2) infinite; }
 
 /* ---- 报告(羊皮纸档案模式:ReportView 外层挂 data-theme="atlas") ---- */
@@ -262,7 +272,8 @@ a:hover { text-decoration: underline; }
 
 @keyframes pulse { 0%, 100% { box-shadow: 0 0 0 0 var(--map-overlay-selection); } 50% { box-shadow: 0 0 0 6px transparent; } }
 @keyframes blink { 0%, 49% { opacity: 1; } 50%, 100% { opacity: 0; } }
-@keyframes tele-in { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
+/* 自上方滑入:正向 translateY 会把最后一行的包围盒瞬时计入 scrollable overflow,300px 边界处滚动条闪现 */
+@keyframes tele-in { from { opacity: 0; transform: translateY(-6px); } to { opacity: 1; transform: translateY(0); } }
 @keyframes fade-in { from { opacity: 0; } to { opacity: 1; } }
 @keyframes dialog-in { from { opacity: 0; transform: translateY(10px) scale(0.99); } to { opacity: 1; transform: translateY(0) scale(1); } }
 

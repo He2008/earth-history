@@ -121,7 +121,7 @@ export function HomeClient({ tdtKey }: { tdtKey: string }) {
         <h1 className="wordmark">史地</h1>
         <span className="wordmark-sub">PLACE LORE</span>
       </header>
-      <p className="tagline">在地球上点一个地方,问它的历史。AI 检索方志、档案与论文,几分钟产出带引用的报告。</p>
+      <p className="tagline">每个地方都有来历,点一下就知道。</p>
 
       <main id="main-content">
         {!researching && (

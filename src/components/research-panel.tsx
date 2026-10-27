@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import type { ResearchFeedState } from '@/lib/sse';
 
 const PHASE_LABEL: Record<string, string> = {
@@ -25,6 +25,34 @@ export function ResearchPanel({ state, placeName }: { state: ResearchFeedState; 
   }, [state.notes.length]);
 
   const running = state.status === 'running' || state.status === 'idle';
+  const hasContent = state.content.length > 0;
+
+  // 正文预览渲染全文不截尾:截尾窗(旧 slice(-600))每帧"头删 K 字+尾补 K 字",整段翻涌读感像倒带
+  // 粘底跟随:用户上翻即停,滚回近底(48px)再续;程序化置底也会触发 onScroll,粘底态自洽
+  const previewRef = useRef<HTMLDivElement>(null);
+  const stickRef = useRef(true);
+  useEffect(() => {
+    const el = previewRef.current;
+    if (el && stickRef.current) el.scrollTop = el.scrollHeight;
+  }, [state.content]);
+
+  // 终态不瞬间卸载预览:先播放收起过渡,结束后再移除
+  const [previewExiting, setPreviewExiting] = useState(false);
+  const hadLivePreview = useRef(false);
+  useEffect(() => {
+    if (running && hasContent) {
+      hadLivePreview.current = true;
+      setPreviewExiting(false);
+      return;
+    }
+    if (hadLivePreview.current) {
+      hadLivePreview.current = false;
+      setPreviewExiting(true);
+      const t = setTimeout(() => setPreviewExiting(false), 280);
+      return () => clearTimeout(t);
+    }
+  }, [running, hasContent]);
+
   const dotClass = state.status === 'failed' ? 'fail' : state.status === 'scarce' ? 'warn' : running ? 'live' : '';
   const title = placeName ?? (state.taskId ? `任务 ${state.taskId}` : '新任务');
 
@@ -49,9 +77,18 @@ export function ResearchPanel({ state, placeName }: { state: ResearchFeedState; 
           </div>
         ))}
       </div>
-      {(running && state.content) ? (
-        <div className="stream-preview" aria-label="正文预览">
-          {state.content.slice(-600)}
+      {((running && hasContent) || previewExiting) ? (
+        <div
+          className={`stream-preview${previewExiting ? ' is-exit' : ''}`}
+          ref={previewRef}
+          onScroll={(e) => {
+            const el = e.currentTarget;
+            stickRef.current = el.scrollHeight - el.scrollTop - el.clientHeight < 48;
+          }}
+          aria-label="正文预览"
+          aria-hidden={previewExiting}
+        >
+          {state.content}
           <span className="caret" aria-hidden="true">▌</span>
         </div>
       ) : null}
