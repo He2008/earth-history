@@ -2,7 +2,8 @@
 # 史地 PlaceLore 测试版一键部署到 VPS(实测部署路径见 docs/部署.md)
 #
 # 用法:
-#   ./scripts/deploy.sh <user@host> [选项]
+#   ./scripts/deploy.sh                    # 默认:admin@118.195.142.150:2222
+#   ./scripts/deploy.sh <user@host> [选项] # 覆盖目标
 # 选项:
 #   --ssh-port 22          SSH 端口
 #   --dir /opt/placelore   服务器部署目录(data/ 与 prod.env 在该目录下,跨部署保留)
@@ -13,9 +14,10 @@
 #      → 健康检查(首页 200 重试)
 set -euo pipefail
 
-HOST="${1:-}"; [ -n "$HOST" ] || { sed -n '2,12p' "$0"; exit 1; }
-shift
-SSH_PORT=22 DEPLOY_DIR=/opt/placelore APP_PORT=3000
+# 默认值取自本机 ~/.ssh/config 的 VPS 条目(HostName/User/Port);IdentityFile 为默认 id_rsa,ssh 自动使用
+HOST="${1:-admin@118.195.142.150}"
+if [ -n "${1:-}" ] && [[ "$1" != --* ]]; then shift; fi
+SSH_PORT=2222 DEPLOY_DIR=/opt/placelore APP_PORT=3000
 while [ $# -gt 0 ]; do
   case "$1" in
     --ssh-port) SSH_PORT="$2"; shift 2 ;;
